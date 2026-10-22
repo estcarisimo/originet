@@ -22,7 +22,7 @@ pub enum LoadError {
         #[source]
         source: ReadError,
     },
-    /// The file has no prefixes of the requested family.
+    /// The file has no prefixes at all.
     #[error("{path} has no {family} prefixes; is it the right file?")]
     WrongFamily {
         /// The file.
@@ -38,20 +38,13 @@ pub enum LoadError {
     Select(#[from] SelectError),
 }
 
-fn len(table: &Table, family: Family) -> usize {
-    match family {
-        Family::V4 => table.len_v4(),
-        Family::V6 => table.len_v6(),
-    }
-}
-
 fn load_file(table: &mut Table, family: Family, path: &Path) -> Result<usize, LoadError> {
-    let before = len(table, family);
-    table.load_path(path).map_err(|source| LoadError::Read {
-        path: path.display().to_string(),
-        source,
-    })?;
-    let prefixes = len(table, family) - before;
+    let prefixes = table
+        .load_path_family(path, family)
+        .map_err(|source| LoadError::Read {
+            path: path.display().to_string(),
+            source,
+        })?;
     if prefixes == 0 {
         return Err(LoadError::WrongFamily {
             path: path.display().to_string(),
@@ -233,10 +226,21 @@ mod tests {
         assert_eq!(info.date.as_deref(), Some("2024-01-02"));
         assert_eq!(info.source, Source::Local);
         assert_eq!(info.file, "routeviews-rv2-20240102-1200.pfx2as");
+        let error = load_local(&mut table, Family::V6, &path).unwrap_err();
+        assert!(matches!(error, LoadError::Read { .. }), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("expected an ipv6 prefix, got 8.8.8.0/24"),
+            "{error}"
+        );
+        assert_eq!(table.len_v6(), 0);
+        let empty = dir.path().join("routeviews-rv2-20240103-1200.pfx2as");
+        fs::write(&empty, "# nothing\n").unwrap();
         assert!(matches!(
-            load_local(&mut table, Family::V6, &path),
+            load_local(&mut table, Family::V4, &empty),
             Err(LoadError::WrongFamily {
-                family: Family::V6,
+                family: Family::V4,
                 ..
             })
         ));

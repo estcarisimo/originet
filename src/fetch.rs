@@ -172,10 +172,11 @@ impl Fetcher {
     pub fn listing(&self, family: Family, year_month: YearMonth) -> Result<Vec<Snapshot>, FetchError> {
         let path = self.listing_path(family, year_month);
         let url = caida::listing_url(family, year_month);
-        let today = jiff::Zoned::now().date();
-        let is_past_month = year_month < (today.year(), today.month());
-        let cached_is_fresh = path.is_file()
-            && (is_past_month || (!self.refresh_index && Self::is_fresh(&path, INDEX_MAX_AGE)));
+        // A listing is final only once it was fetched after its month ended (UTC):
+        // one cached while the month was still running could miss later snapshots.
+        let cached_is_final = path.is_file() && Self::fetched_after_month_end(&path, year_month);
+        let cached_is_fresh = cached_is_final
+            || (path.is_file() && !self.refresh_index && Self::is_fresh(&path, INDEX_MAX_AGE));
         if self.offline {
             if !path.is_file() {
                 return Err(FetchError::Offline {
@@ -197,6 +198,9 @@ impl Fetcher {
                 Err(error) => return Err(error),
             };
             let snapshots = caida::parse_listing(family, year_month, &html);
+            if snapshots.is_empty() && !html.is_empty() {
+                log::warn!("{url} exists but lists no snapshot files");
+            }
             let names = snapshots.iter().fold(String::new(), |mut names, snapshot| {
                 names.push_str(snapshot.file_name());
                 names.push('\n');
@@ -207,6 +211,26 @@ impl Fetcher {
             return Ok(snapshots);
         }
         Self::read_listing(family, year_month, &path)
+    }
+
+    /// Whether the file at `path` was written after the end of `(year, month)`, in UTC.
+    fn fetched_after_month_end(path: &Path, (year, month): YearMonth) -> bool {
+        let Some(modified) = fs::metadata(path).and_then(|meta| meta.modified()).ok() else {
+            return false;
+        };
+        let Ok(modified) = jiff::Timestamp::try_from(modified) else {
+            return false;
+        };
+        let Ok(first_of_month) = jiff::civil::Date::new(year, month, 1) else {
+            return false;
+        };
+        let Ok(next_month) = first_of_month.checked_add(jiff::Span::new().months(1)) else {
+            return false;
+        };
+        let Ok(month_end) = next_month.to_zoned(jiff::tz::TimeZone::UTC) else {
+            return false;
+        };
+        modified >= month_end.timestamp()
     }
 
     fn read_listing(family: Family, year_month: YearMonth, path: &Path) -> Result<Vec<Snapshot>, FetchError> {
@@ -369,6 +393,9 @@ mod tests {
         let listed = fetcher.listing(Family::V6, (2024, 1)).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].path, "2024/01/routeviews-rv6-20240131-1200.pfx2as.gz");
+        // Written now, long after January 2024 ended: final. A month that has not ended is not.
+        assert!(Fetcher::fetched_after_month_end(&listing_path, (2024, 1)));
+        assert!(!Fetcher::fetched_after_month_end(&listing_path, (2999, 1)));
 
         let snapshot_path = fetcher.snapshot_path(&snapshot());
         fs::create_dir_all(snapshot_path.parent().unwrap()).unwrap();

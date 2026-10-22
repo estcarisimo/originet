@@ -100,10 +100,24 @@ fn main() -> ExitCode {
     match run(&args) {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("error: {error:#}");
+            eprintln!("error: {}", render(&error));
             ExitCode::FAILURE
         }
     }
+}
+
+/// The error and its causes, oldest last, without repeating a cause whose text the
+/// previous message already carries (the crate's errors embed their source's message).
+fn render(error: &anyhow::Error) -> String {
+    let mut text = error.to_string();
+    for cause in error.chain().skip(1) {
+        let cause = cause.to_string();
+        if !text.contains(&cause) {
+            text.push_str(": ");
+            text.push_str(&cause);
+        }
+    }
+    text
 }
 
 fn init_logging(verbosity: u8) {
@@ -137,7 +151,15 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
             continue;
         }
         let info = match local {
-            Some(path) => load::load_local(&mut table, family, path)?,
+            Some(path) => {
+                if let Some(date) = args.date {
+                    log::warn!(
+                        "--date {date} does not apply to {family}: it is read from {}",
+                        path.display()
+                    );
+                }
+                load::load_local(&mut table, family, path)?
+            }
             None => load::load_caida(&mut table, &fetcher, family, args.date)?,
         };
         log::info!("{}: {} prefixes from {}", family, info.prefixes, info.file);

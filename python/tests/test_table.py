@@ -95,7 +95,7 @@ def test_one_family_is_enough() -> None:
 def test_from_files_validates_its_arguments(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         Table.from_files()
-    with pytest.raises(OSError, match="no ipv4 prefixes"):
+    with pytest.raises(OSError, match="expected an ipv4 prefix"):
         Table.from_files(ipv4=FIXTURES / "sample-v6.pfx2as")
     with pytest.raises(OSError):
         Table.from_files(ipv4=tmp_path / "missing.pfx2as")
@@ -119,3 +119,15 @@ def test_from_caida_offline_uses_the_cache(tmp_path: Path) -> None:
         Table.from_caida("yesterday", cache_dir=tmp_path, ipv6=False, offline=True)
     with pytest.raises(ValueError, match="at least one"):
         Table.from_caida(cache_dir=tmp_path, ipv4=False, ipv6=False, offline=True)
+    with pytest.raises(ValueError, match="dataset starts in 2005"):
+        Table.from_caida("2004-12-31", cache_dir=tmp_path, ipv6=False, offline=True)
+
+
+def test_bulk_lookups_from_several_threads(table: Table) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    ips = ["8.8.8.8", "1.1.8.9", "203.0.113.1", "2606:4700::1111"] * 250
+    expected = table.lookup_asns(ips)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: table.lookup_asns(ips), range(8)))
+    assert all(result == expected for result in results)

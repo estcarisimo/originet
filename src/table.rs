@@ -7,7 +7,8 @@ use std::path::Path;
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 use prefix_trie::PrefixMap;
 
-use crate::pfx2as::{self, Entry, Origins, ReadError};
+use crate::caida::Family;
+use crate::pfx2as::{self, Entry, Origins, ParseError, ReadError};
 
 /// A prefix-to-origin table for IPv4 and IPv6.
 #[derive(Debug, Default)]
@@ -58,6 +59,37 @@ impl Table {
     pub fn load_path(&mut self, path: &Path) -> Result<usize, ReadError> {
         let reader = pfx2as::open(path)?;
         self.load(reader)
+    }
+
+    /// Loads a stream that must contain only `family` prefixes; an entry of the other
+    /// family is an error naming its line. Returns how many entries were loaded.
+    pub fn load_family<R: BufRead>(&mut self, reader: R, family: Family) -> Result<usize, ReadError> {
+        let mut count = 0;
+        for item in pfx2as::numbered_entries(reader) {
+            let (line, entry) = item?;
+            let matches = match (family, entry.prefix) {
+                (Family::V4, IpNet::V4(_)) | (Family::V6, IpNet::V6(_)) => true,
+                (Family::V4 | Family::V6, _) => false,
+            };
+            if !matches {
+                return Err(ReadError::Parse {
+                    line,
+                    source: ParseError::Family {
+                        expected: family.label(),
+                        prefix: entry.prefix.to_string(),
+                    },
+                });
+            }
+            self.insert(entry);
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// Loads a `pfx2as` file (plain or gzip) that must contain only `family` prefixes.
+    pub fn load_path_family(&mut self, path: &Path, family: Family) -> Result<usize, ReadError> {
+        let reader = pfx2as::open(path)?;
+        self.load_family(reader, family)
     }
 
     /// Number of IPv4 prefixes in the table.
@@ -136,6 +168,31 @@ mod tests {
         assert!(table.lookup("2a00::1".parse().unwrap()).is_none());
         assert_eq!(table.len_v4(), 3);
         assert_eq!(table.len_v6(), 2);
+    }
+
+    #[test]
+    fn load_family_rejects_the_other_family() {
+        let mut table = Table::new();
+        let loaded = table
+            .load_family("8.8.8.0\t24\t15169\n".as_bytes(), Family::V4)
+            .unwrap();
+        assert_eq!(loaded, 1);
+        let error = table
+            .load_family(
+                "8.8.8.0\t24\t15169\n2001:db8::\t32\t64496\n".as_bytes(),
+                Family::V4,
+            )
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "line 2: expected an ipv4 prefix, got 2001:db8::/32"
+        );
+        assert_eq!(table.len_v6(), 0, "nothing of the other family is inserted");
+        assert!(
+            table
+                .load_family("8.8.8.0\t24\t15169\n".as_bytes(), Family::V6)
+                .is_err()
+        );
     }
 
     #[test]

@@ -93,6 +93,14 @@ pub enum ParseError {
     /// The origin field is not ASNs joined with `_` or `,`.
     #[error("invalid origin field {0:?}")]
     Origins(String),
+    /// The prefix belongs to the other address family than the one being loaded.
+    #[error("expected an {expected} prefix, got {prefix}")]
+    Family {
+        /// `ipv4` or `ipv6`.
+        expected: &'static str,
+        /// The prefix found.
+        prefix: String,
+    },
 }
 
 /// Parses one line. Returns `Ok(None)` for blank lines and comments.
@@ -137,19 +145,24 @@ pub enum ReadError {
     },
 }
 
-/// Iterates over the entries of a `pfx2as` stream.
-pub fn entries<R: BufRead>(reader: R) -> impl Iterator<Item = Result<Entry, ReadError>> {
+/// Iterates over the entries of a `pfx2as` stream with their 1-based line numbers.
+pub fn numbered_entries<R: BufRead>(reader: R) -> impl Iterator<Item = Result<(usize, Entry), ReadError>> {
     reader.lines().enumerate().filter_map(|(index, line)| match line {
         Err(error) => Some(Err(ReadError::Io(error))),
         Ok(line) => match parse_line(&line) {
             Ok(None) => None,
-            Ok(Some(entry)) => Some(Ok(entry)),
+            Ok(Some(entry)) => Some(Ok((index + 1, entry))),
             Err(source) => Some(Err(ReadError::Parse {
                 line: index + 1,
                 source,
             })),
         },
     })
+}
+
+/// Iterates over the entries of a `pfx2as` stream.
+pub fn entries<R: BufRead>(reader: R) -> impl Iterator<Item = Result<Entry, ReadError>> {
+    numbered_entries(reader).map(|item| item.map(|(_, entry)| entry))
 }
 
 /// Opens a `pfx2as` file, transparently decompressing gzip (detected by its magic bytes,

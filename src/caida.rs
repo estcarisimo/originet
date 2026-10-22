@@ -4,10 +4,10 @@
 //! `https://publicdata.caida.org/datasets/routing/routeviews-prefix2as/YYYY/MM/`
 //! (IPv4, files named `routeviews-rv2-YYYYMMDD-HHMM.pfx2as.gz`) and
 //! `.../routeviews6-prefix2as/YYYY/MM/` (IPv6, `routeviews-rv6-...`). Each dataset
-//! has an index, `pfx2as-creation.log`, listing every file ever published as
-//! `seqnum<TAB>unix-timestamp<TAB>YYYY/MM/file`, but it is a rolling window of the
-//! last thirty days or so. Older snapshots are found through the monthly directory
-//! listings (`YYYY/MM/`), which this module parses too.
+//! has an index, `pfx2as-creation.log`, with one line per recent file
+//! (`seqnum<TAB>unix-timestamp<TAB>YYYY/MM/file`); it is a rolling window of about
+//! thirty days, not a full history. Older snapshots are found through the monthly
+//! directory listings (`YYYY/MM/`), which this module parses too.
 
 use std::fmt;
 
@@ -93,7 +93,9 @@ pub fn parse_listing(family: Family, (year, month): YearMonth, html: &str) -> Ve
         .split("href=\"")
         .skip(1)
         .filter_map(|rest| rest.split('"').next())
-        .filter(|name| name.ends_with(".pfx2as.gz") && !name.contains('/'))
+        .filter(|name| {
+            name.ends_with(".pfx2as.gz") && !name.contains(['/', '\\', ':']) && !name.starts_with('.')
+        })
         .filter_map(|name| {
             let date = date_from_file_name(name)?;
             Some(Snapshot {
@@ -108,6 +110,24 @@ pub fn parse_listing(family: Family, (year, month): YearMonth, html: &str) -> Ve
     snapshots.sort_by(|a, b| a.date.cmp(&b.date).then(a.path.cmp(&b.path)));
     snapshots.dedup_by(|a, b| a.path == b.path);
     snapshots
+}
+
+/// True when `path` is exactly `YYYY/MM/<file>`: three non-empty components, digits in
+/// the first two, and a file name that is a plain name (no `..`, `.`, slash, backslash
+/// or drive colon). Anything else could point outside the cache directory and is rejected.
+pub fn is_valid_snapshot_path(path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let [year, month, name] = parts.as_slice() else {
+        return false;
+    };
+    year.len() == 4
+        && year.bytes().all(|b| b.is_ascii_digit())
+        && month.len() == 2
+        && month.bytes().all(|b| b.is_ascii_digit())
+        && !name.is_empty()
+        && *name != "."
+        && *name != ".."
+        && !name.contains(['\\', ':'])
 }
 
 /// Reads the file names of a cached listing (one per line) back into snapshots.
@@ -183,6 +203,14 @@ pub enum IndexError {
         /// The offending line.
         text: String,
     },
+    /// A path that is not `YYYY/MM/<file>`, or would escape the cache directory.
+    #[error("index line {line}: unexpected path {path:?}, want YYYY/MM/<file>")]
+    Path {
+        /// 1-based line number.
+        line: usize,
+        /// The path field.
+        path: String,
+    },
     /// A file name without a `YYYYMMDD` date.
     #[error("index line {line}: no date in file name {path:?}")]
     Date {
@@ -228,6 +256,9 @@ impl Index {
             let seqnum = Some(seqnum.trim().parse().map_err(|_| fields_error())?);
             let created = Some(created.trim().parse().map_err(|_| fields_error())?);
             let path = path.trim().to_owned();
+            if !is_valid_snapshot_path(&path) {
+                return Err(IndexError::Path { line: number, path });
+            }
             let date =
                 date_from_file_name(path.rsplit('/').next().unwrap_or(&path)).ok_or(IndexError::Date {
                     line: number,
@@ -317,8 +348,9 @@ mod tests {
     use super::*;
     use jiff::civil::date;
 
+    // A realistic excerpt: the real index is a rolling window of about thirty days.
     const LOG: &str = "# Format: 1\n# Fields: seqnum timestamp path\n\
-        1\t1117584000\t2005/05/routeviews-rv2-20050601-0000.pfx2as.gz\n\
+        6748\t1790180000\t2026/09/routeviews-rv2-20260922-1200.pfx2as.gz\n\
         6776\t1792599333\t2026/10/routeviews-rv2-20261020-1000.pfx2as.gz\n\
         6777\t1792685687\t2026/10/routeviews-rv2-20261021-0800.pfx2as.gz\n";
 
@@ -335,7 +367,7 @@ mod tests {
             latest.url(),
             "https://publicdata.caida.org/datasets/routing/routeviews-prefix2as/2026/10/routeviews-rv2-20261021-0800.pfx2as.gz"
         );
-        assert_eq!(index.earliest().date, date(2005, 6, 1));
+        assert_eq!(index.earliest().date, date(2026, 9, 22));
     }
 
     #[test]
@@ -344,11 +376,11 @@ mod tests {
         assert_eq!(index.latest().seqnum, Some(6777));
         assert_eq!(index.on_or_before(date(2026, 10, 21)).unwrap().seqnum, Some(6777));
         assert_eq!(index.on_or_before(date(2026, 10, 20)).unwrap().seqnum, Some(6776));
-        assert_eq!(index.on_or_before(date(2020, 1, 1)).unwrap().seqnum, Some(1));
+        assert_eq!(index.on_or_before(date(2026, 10, 1)).unwrap().seqnum, Some(6748));
         assert_eq!(index.on_or_before(date(2030, 1, 1)).unwrap().seqnum, Some(6777));
-        assert_eq!(index.on_or_before(date(2005, 5, 31)), None);
-        assert!(index.covers(date(2005, 6, 1)));
-        assert!(!index.covers(date(2005, 5, 31)));
+        assert_eq!(index.on_or_before(date(2026, 9, 21)), None);
+        assert!(index.covers(date(2026, 9, 22)));
+        assert!(!index.covers(date(2026, 9, 21)));
     }
 
     #[test]
@@ -425,6 +457,40 @@ mod tests {
         assert_eq!(
             Index::parse(Family::V6, "# only comments\n"),
             Err(IndexError::Empty(Family::V6))
+        );
+    }
+
+    #[test]
+    fn rejects_paths_that_escape_the_cache() {
+        for path in [
+            "2026/10/../../../../escape-20261021-0800.pfx2as.gz",
+            "/etc/routeviews-rv2-20261021-0800.pfx2as.gz",
+            "2026/10/..",
+            "2026/10/",
+            "2026/routeviews-rv2-20261021-0800.pfx2as.gz",
+            "2026/10/a/routeviews-rv2-20261021-0800.pfx2as.gz",
+            "2026/1x/routeviews-rv2-20261021-0800.pfx2as.gz",
+            "2026/10/..\\routeviews-rv2-20261021-0800.pfx2as.gz",
+        ] {
+            assert!(!is_valid_snapshot_path(path), "{path} should be rejected");
+            assert!(
+                matches!(
+                    Index::parse(Family::V4, &format!("1\t1\t{path}\n")),
+                    Err(IndexError::Path { line: 1, .. })
+                ),
+                "{path}"
+            );
+        }
+        assert!(is_valid_snapshot_path(
+            "2005/05/routeviews-oix-20050509-1200.pfx2as.gz"
+        ));
+        assert_eq!(
+            parse_listing(
+                Family::V4,
+                (2026, 10),
+                "<a href=\"../x-20261021-0800.pfx2as.gz\">x</a>"
+            ),
+            []
         );
     }
 

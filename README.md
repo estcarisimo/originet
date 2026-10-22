@@ -1,7 +1,7 @@
 # 🌐 map-ip-to-asn
 
 Map IP addresses to the Autonomous System that originates them, using CAIDA's daily
-RouteViews prefix-to-AS snapshots. One static binary: it picks the snapshot for the day
+RouteViews prefix-to-AS snapshots. One binary, no C library: it picks the snapshot for the day
 you ask for, downloads it once, builds a longest-prefix-match trie and answers a million
 addresses in about two seconds. A Python package exposes the same table for bulk lookups.
 

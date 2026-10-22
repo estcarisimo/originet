@@ -258,6 +258,32 @@ fn offline_with_a_cached_snapshot_works() {
 }
 
 #[test]
+fn date_with_a_local_file_warns() {
+    with_fixtures()
+        .args(["--date", "1999-01-01", "8.8.8.8", "-F", "csv", "-q"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "--date 1999-01-01 does not apply to ipv4",
+        ));
+}
+
+#[test]
+fn errors_are_printed_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = cmd()
+        .arg("--pfx2as")
+        .arg(fixture("sample-v6.pfx2as"))
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .arg("8.8.8.8")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr.matches("expected an ipv4 prefix").count(), 1, "{stderr}");
+}
+
+#[test]
 fn rejects_a_bad_date() {
     with_fixtures()
         .args(["--date", "2026-13-01", "8.8.8.8"])
@@ -274,7 +300,9 @@ fn wrong_family_file_is_rejected() {
         .arg("8.8.8.8")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("has no ipv4 prefixes"));
+        .stderr(predicate::str::contains(
+            "line 1: expected an ipv4 prefix, got 2001::/32",
+        ));
 }
 
 #[test]

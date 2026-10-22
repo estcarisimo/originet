@@ -30,9 +30,9 @@ Modules:
 | --- | --- |
 | `pfx2as` | Parses the `pfx2as` format line by line, gzip or plain; `Origins` keeps the field verbatim and knows whether it is multi-origin or an AS set |
 | `table` | `Table` holds one longest-prefix-match trie per family; `lookup` returns the prefix and a reference to its origins |
-| `caida` | Dataset URLs, `Index::parse` of `pfx2as-creation.log`, `Index::select` by date |
+| `caida` | Dataset URLs, `Index::parse` of the rolling `pfx2as-creation.log`, `parse_listing` of a month's directory page, `Index::on_or_before` |
 | `fetch` | `Fetcher`: cached index (six-hour freshness), cached snapshots, atomic downloads, offline mode |
-| `load` | `load_local` and `load_caida` fill a table and return a `SnapshotInfo` with the provenance |
+| `load` | `select_snapshot` resolves a date through the index and the monthly listings; `load_local` and `load_caida` fill a table and return a `SnapshotInfo` with the provenance |
 | `input` | `Item::parse` and `read_items` for addresses from text |
 | `output` | `Record`, `Report`, `Summary`, and `write` for every format |
 

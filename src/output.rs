@@ -36,7 +36,8 @@ pub struct SnapshotInfo {
 /// One answer. Flat on purpose so every format carries the same columns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Record {
-    /// The address as given.
+    /// The address, normalized (`8.8.8.8/32` and `::ffff:8.8.8.8` become `8.8.8.8`); an
+    /// invalid input is kept as typed.
     pub ip: String,
     /// The longest matching prefix, or null when none covers the address.
     pub prefix: Option<String>,

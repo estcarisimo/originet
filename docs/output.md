@@ -11,7 +11,7 @@ Every format carries the same six columns per input, in input order:
 | `snapshot` | The date of the snapshot that answered (`YYYY-MM-DD`), when known |
 | `error` | Why the input could not be looked up; only set for inputs that are not IP addresses |
 
-Null is `null` in JSON and an empty field in CSV/TSV/Parquet.
+Null is `null` in JSON, an empty field in CSV/TSV and a real null in Parquet.
 
 ## `json` (default)
 
