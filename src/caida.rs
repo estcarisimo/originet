@@ -369,13 +369,13 @@ mod tests {
         assert!(snapshots.windows(2).all(|pair| pair[0].date < pair[1].date));
 
         // The sort links, the parent directory and anything that is not a snapshot are dropped.
-        assert!(
+        assert_eq!(
             parse_listing(
                 Family::V4,
                 (2015, 1),
                 "<a href=\"?C=N;O=D\">Name</a><a href=\"/x/2015/\">Parent</a>"
-            )
-            .is_empty()
+            ),
+            []
         );
         // The oldest files use another prefix; the date is still found.
         let old = parse_listing(

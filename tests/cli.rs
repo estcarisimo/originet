@@ -98,7 +98,7 @@ fn only_the_needed_family_is_loaded() {
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["snapshots"].as_array().unwrap().len(), 1);
     assert_eq!(report["results"][0]["asn"], 19281);
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr, b"");
 }
 
 #[test]

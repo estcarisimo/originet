@@ -4,7 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    versioning-strategy: increase-if-necessary
     groups:
       rust-minor-and-patch:
         update-types: ["minor", "patch"]

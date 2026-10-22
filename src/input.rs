@@ -122,7 +122,7 @@ mod tests {
         match Item::parse("not-an-ip") {
             Item::Invalid { text, reason } => {
                 assert_eq!(text, "not-an-ip");
-                assert!(!reason.is_empty());
+                assert_ne!(reason, "");
             }
             Item::Address(_) => panic!(),
         }

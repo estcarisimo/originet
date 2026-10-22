@@ -28,7 +28,6 @@ MANIFEST
 
 # UV
 .venv/
-uv.lock
 
 # PyCharm
 .idea/
