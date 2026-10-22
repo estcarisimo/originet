@@ -1,0 +1,3 @@
+# Documentation site. Build with: uvx --with-requirements docs/requirements.txt mkdocs build --strict
+mkdocs==1.6.1
+mkdocs-material==9.7.7

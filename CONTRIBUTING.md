@@ -1,0 +1,71 @@
+# Contributing
+
+Thanks for helping with map-ip-to-asn. Bugs and proposals go through
+[issues](https://github.com/estcarisimo/map-ip-to-asn/issues); code through pull requests.
+
+## Setup
+
+```bash
+git clone git@github.com:estcarisimo/map-ip-to-asn.git && cd map-ip-to-asn
+cargo build                       # the CLI: target/debug/map-ip-to-asn
+cargo test --workspace --all-features
+cd python && uv sync --locked     # builds the extension in editable mode (needs Rust)
+uv run pytest
+```
+
+Requirements: Rust 1.88 or newer (`rust-version` in `Cargo.toml`), and for the Python
+bindings [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. On an Apple Silicon
+Mac the Rust toolchain must be the arm64 one (rustup); an x86_64 Homebrew toolchain
+cannot build the extension for an arm64 Python.
+
+Checks that CI runs, in the same order:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy -p map-ip-to-asn --all-targets --no-default-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc -p map-ip-to-asn --no-deps --all-features
+cargo deny check                  # cargo install cargo-deny
+cargo test --workspace --all-features --locked
+cargo test -p map-ip-to-asn --no-default-features --locked
+(cd python && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q)
+docker build -t map-ip-to-asn .
+uvx --with-requirements docs/requirements.txt mkdocs build --strict
+```
+
+Tests never touch the network: they use the fixtures in `tests/fixtures/` and a seeded
+cache directory. Keep it that way; a test that needs CAIDA is an `#[ignore]` test.
+
+## Pull requests
+
+- Branch from `main`; never push to `main` directly (the `protect-main` ruleset enforces
+  a pull request with green checks).
+- Every PR gets an independent review following `.github/REVIEW.md` and is merged only
+  after `VERDICT: APPROVE` on its final commit with CI green.
+- Add a bullet under `[Unreleased]` in `CHANGELOG.md` for user-visible changes.
+- American English in identifiers, comments, docs and the changelog.
+- Every documented command is run before it is written down; example output is a real
+  capture.
+- A change to the Python API updates `python/map_ip_to_asn/_native.pyi` and
+  `python/tests/` too.
+- Dependencies: pinned to SHAs in workflows; new crates must pass `cargo deny check`
+  (license allow-list in `deny.toml`).
+
+## Releases
+
+1. Move `[Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - YYYY-MM-DD`.
+2. Set `version` to `X.Y.Z` in `Cargo.toml`, `python/Cargo.toml`, `python/pyproject.toml`
+   and `CITATION.cff` (with `date-released`); run `cargo update --workspace` and
+   `(cd python && uv lock)` so the lockfiles follow.
+3. Merge that PR, then tag `vX.Y.Z` on `main` and push the tag.
+
+The release workflow checks that the tag, the four versions and the changelog agree and
+that the tag is on `main`; then it creates the GitHub release with the changelog section,
+attaches binaries (Linux x86_64/aarch64 musl, macOS x86_64/arm64, Windows x86_64), builds
+the wheels and the sdist, and pushes `ghcr.io/estcarisimo/map-ip-to-asn`.
+
+Publishing to PyPI and crates.io is off until Trusted Publishing is configured on each
+registry (a *pending publisher* on PyPI for `map-ip-to-asn`, workflow `release.yml`,
+environment `pypi`; a trusted publisher on crates.io for the crate, environment
+`crates-io`). Turn each one on with a repository variable: `PYPI_PUBLISH=true`,
+`CRATES_IO_PUBLISH=true`.

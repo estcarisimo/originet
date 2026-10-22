@@ -67,3 +67,12 @@ htmlcov/
 # Results directory
 results/
 output/
+# Rust
+target/
+
+# Python bindings
+python/.venv/
+python/uv.lock.tmp
+
+# MkDocs
+site/

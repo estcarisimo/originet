@@ -1,237 +1,215 @@
-# IP to ASN Mapper
+# 🌐 map-ip-to-asn
 
-A minimal, maintainable CLI tool for mapping IP addresses to Autonomous System Numbers (ASNs) using CAIDA's infrastructure.
+Map IP addresses to the Autonomous System that originates them, using CAIDA's daily
+RouteViews prefix-to-AS snapshots. One static binary: it picks the snapshot for the day
+you ask for, downloads it once, builds a longest-prefix-match trie and answers a million
+addresses in about two seconds. A Python package exposes the same table for bulk lookups.
 
-## Key Features
+[![CI](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/ci.yml/badge.svg)](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/ci.yml)
+[![Security](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/security.yml/badge.svg)](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/security.yml)
+[![CodeQL](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/codeql.yml/badge.svg)](https://github.com/estcarisimo/map-ip-to-asn/actions/workflows/codeql.yml)
+[![Docs](https://img.shields.io/badge/docs-estcarisimo.github.io-blue)](https://estcarisimo.github.io/map-ip-to-asn/)
+![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-- **CLI Interface**: Support for single IP lookups and batch processing from files
-- **Multiple Output Formats**: JSON, CSV, and Parquet output formats
-- **CAIDA PyIPMeta Integration**: Leverages CAIDA's pyipmeta for accurate IP to ASN mappings
-- **Daily RouteViews Snapshots**: Uses daily snapshots from RouteViews' prefix-to-AS dataset
-- **Historical Analysis**: Specify past dates for retrospective studies
-- **Docker Support**: Fully containerized with all dependencies included
-- **Type Safety**: Built with Pydantic for robust data validation
+## ✨ Features
 
-## Installation
+- 🔍 **Longest-prefix match**: every answer carries the most specific prefix that covers the address, its origin ASN and, for multi-origin prefixes and AS sets, all origins in CAIDA's notation
+- 📅 **Any day since 2005**: `--date` resolves the newest snapshot on or before that day through CAIDA's index and monthly listings; the default is the newest snapshot
+- 🌍 **IPv4 and IPv6 in one run**: each family's snapshot is loaded only when the input needs it
+- 📦 **Batch by default**: addresses from arguments, a file or standard input; JSON, JSON Lines, CSV, TSV or Parquet out
+- 💾 **Cached and offline-capable**: snapshots are downloaded once (atomically) into a cache; `--offline` never touches the network; `--pfx2as` uses your own file
+- 🐍 **Python bindings**: `Table.from_caida()` / `Table.from_files()` and `lookup_many()` with the GIL released
+- 🦀 **Single binary, no C stack**: no libipmeta, no pyipmeta, no scraping; `unsafe_code = "forbid"`
+- 🐳 **Docker image**: multi-stage build, non-root, cache volume
 
-### Using UV (Recommended)
+## 🚀 Quick Start
 
-UV is a fast Python package manager written in Rust. Install UV first:
+### CLI
+
+With a Rust toolchain (1.88 or newer):
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+cargo install --git https://github.com/estcarisimo/map-ip-to-asn --locked
+map-ip-to-asn 8.8.8.8 2001:4860::8888
 ```
 
-Then install the project:
+Or from source:
 
 ```bash
-# Clone the repository
-git clone https://github.com/estcarisimo/map-ip-to-asn.git
-cd map-ip-to-asn
-
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e .
+git clone https://github.com/estcarisimo/map-ip-to-asn.git && cd map-ip-to-asn
+cargo build --release --locked          # target/release/map-ip-to-asn
 ```
 
-### Using Docker
+Prebuilt binaries for Linux (x86_64, aarch64, static musl), macOS (Intel, Apple Silicon)
+and Windows are attached to every
+[tagged release](https://github.com/estcarisimo/map-ip-to-asn/releases), with SHA-256 checksums.
 
-The easiest way to use this tool is with Docker, which includes all external dependencies (the Docker image uses pip for simplicity, while UV is recommended for local development):
+### Python
+
+The package is not on PyPI yet; install it from the repository (builds the extension,
+so it needs Rust):
 
 ```bash
-# Build the Docker image
-docker build -f docker/Dockerfile -t map-ip-to-asn .
-
-# Run with Docker
-docker run --rm -v $(pwd)/data:/data map-ip-to-asn \
-  --file /data/input/ips.txt \
-  --format json \
-  --output /data/output/results.json
+uv pip install "map-ip-to-asn @ git+https://github.com/estcarisimo/map-ip-to-asn#subdirectory=python"
 ```
 
-### Manual Installation
-
-If you need to install manually, you'll need to build and install these external dependencies:
-
-1. [wandio](https://github.com/LibtraceTeam/wandio)
-2. [libipmeta](https://github.com/CAIDA/libipmeta)
-3. [pyipmeta](https://github.com/CAIDA/pyipmeta)
-
-## Usage
-
-### Command Line Interface
+### Docker
 
 ```bash
-# Lookup a single IP
-map-ip-to-asn --ip 8.8.8.8
+docker build -t map-ip-to-asn .
+docker run --rm -v map-ip-to-asn-cache:/cache map-ip-to-asn 8.8.8.8
+```
 
-# Process IPs from a file
+## 📖 Usage
+
+```bash
+# One or more addresses, JSON report on stdout, summary on stderr
+map-ip-to-asn 8.8.8.8 1.1.1.1 2606:4700::1111
+
+# A file (one address per line, # comments allowed) to CSV
 map-ip-to-asn --file ips.txt --format csv --output results.csv
 
-# Use a specific date for the RouteViews snapshot
-map-ip-to-asn --file ips.txt --date 2023-01-01 --format parquet
+# Standard input, JSON Lines out: the shape for pipelines
+cat ips.txt | map-ip-to-asn -f - -F jsonl > results.jsonl
 
-# Show help
-map-ip-to-asn --help
+# The routing table of a given day (newest snapshot on or before it)
+map-ip-to-asn --date 2015-01-01 --file ips.txt -F parquet -o ips-2015.parquet
+
+# Your own snapshot files (plain or gzip), no download
+map-ip-to-asn --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --pfx2as6 routeviews-rv6-20261021-1200.pfx2as.gz -f ips.txt
+
+# Never touch the network; fail unless everything needed is cached
+map-ip-to-asn --offline --date 2024-02-29 8.8.8.8
+
+# Fail (exit 1) if any input is not an IP address; show what is fetched
+map-ip-to-asn --strict -v -f ips.txt
 ```
 
-### Options
+Every output format has the same six columns: `ip`, `prefix`, `asn`, `origins`,
+`snapshot`, `error`. `asn` is the first ASN of `origins`; `origins` is `15169`,
+`149511_138421` (several ASes announce the prefix) or `64496,64497` (an AS set). An
+address no prefix covers gets null `prefix` and `asn`; an input that is not an address
+gets an `error`. The JSON report also lists the snapshot files used, their source and
+how many prefixes each had. Details: [output formats](https://estcarisimo.github.io/map-ip-to-asn/output/),
+[the data](https://estcarisimo.github.io/map-ip-to-asn/data/).
 
-- `--ip ADDRESS`: Single IP address to lookup (mutually exclusive with --file)
-- `--file PATH`: Path to file containing IP addresses, one per line (mutually exclusive with --ip)
-- `--format {json,csv,parquet}`: Output format (default: json)
-- `--output PATH`: Output file path (default: stdout)
-- `--date YYYY-MM-DD`: RouteViews snapshot date (default: today)
+### 🐍 Python
 
-### Docker Usage
+```python
+from map_ip_to_asn import Table
 
-Docker provides the easiest way to use this tool with all dependencies pre-installed. You have several options:
+table = Table.from_caida("2024-01-01")              # newest snapshot on or before that day, cached
+table = Table.from_files(ipv4="routeviews-rv2-20261021-0800.pfx2as.gz")   # or your own file
 
-#### Option 1: Wrapper Script (Recommended)
+table.lookup("8.8.8.8")
+# Match(ip='8.8.8.8', prefix='8.8.8.0/24', asn=15169, origins='15169')
 
-The `run-docker.sh` script provides a seamless experience:
+table.lookup_many(["1.1.1.1", "10.0.0.1", "2001:4860::8888"])   # GIL released
+# [Match(ip='1.1.1.1', prefix='1.1.1.0/24', asn=13335, origins='13335'), None, Match(...)]
+
+table.lookup_asns(["1.1.1.1", "bogus"], strict=False)            # just the ASNs
+# [13335, None]
+
+table.snapshots      # [{'family': 'ipv4', 'source': 'caida', 'date': '2024-01-01', ...}]
+```
+
+## 🔧 Configuration
+
+| Setting | Effect |
+| --- | --- |
+| `--cache-dir DIR` / `MAP_IP_TO_ASN_CACHE_DIR` | Where indexes, listings and snapshots are kept. Default: the platform cache directory (`~/.cache/map-ip-to-asn` on Linux, `~/Library/Caches/map-ip-to-asn` on macOS, `/cache` in the image) |
+| `--offline` | Never download; error if the index, listing or snapshot is not cached |
+| `--refresh` | Fetch the snapshot index again even if the cached copy is less than six hours old |
+| `-v`, `-vv`, `RUST_LOG` | Log what is fetched or read from the cache |
+
+The index and the current month's listing are refreshed after six hours; snapshot files
+and past months never change and are cached forever.
+
+## 🏗️ Architecture
+
+```text
+src/
+├── main.rs      # CLI (clap): arguments, orchestration, stderr summary, exit codes
+├── pfx2as.rs    # Parser of CAIDA's pfx2as format; Origins (A, A_B, A,B); gzip by magic bytes
+├── table.rs     # Longest-prefix-match table (one prefix-trie per family)
+├── caida.rs     # Dataset layout, rolling index and monthly listings, date selection
+├── fetch.rs     # Cached, atomic downloads; index freshness; offline mode
+├── load.rs      # Local file or CAIDA snapshot into a table, with provenance
+├── input.rs     # Address parsing (/32, /128, IPv4-mapped IPv6, comments)
+└── output.rs    # Records, summary, report; JSON, JSON Lines, CSV, TSV, Parquet
+python/
+├── src/lib.rs            # PyO3 module map_ip_to_asn._native: Table, Match
+├── map_ip_to_asn/        # Package, typed stub, py.typed
+└── tests/                # pytest suite
+```
+
+The crate is also a library (`map_ip_to_asn`); see
+[Rust library](https://estcarisimo.github.io/map-ip-to-asn/library/).
+
+## 🧪 Development
 
 ```bash
-# Make the script executable (first time only)
-chmod +x run-docker.sh
-
-# Build the Docker image (first time only)
-./run-docker.sh --build-only
-
-# Use exactly like the CLI - all arguments are passed through
-./run-docker.sh --ip 8.8.8.8
-./run-docker.sh --file ./data/ips.txt --format csv --output ./data/results.csv
-./run-docker.sh --file ./data/ips.txt --date 2023-01-01 --format parquet
-./run-docker.sh --help
-
-# The script automatically creates data/input and data/output directories
+cargo build && cargo test --workspace --all-features
+cargo fmt --all && cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo deny check                                  # cargo install cargo-deny
+cd python && uv sync --locked && uv run pytest -q && uv run ruff check . && uv run mypy
+uvx --with-requirements docs/requirements.txt mkdocs build --strict
 ```
 
-#### Option 2: Direct Docker Commands
+Tests never touch the network: they run against `tests/fixtures/` and a seeded cache.
+`CONTRIBUTING.md` has the full checklist and the release procedure.
 
-```bash
-# Build the image
-docker build -f docker/Dockerfile -t map-ip-to-asn .
+## 📊 Example Output
 
-# Create directories for data exchange
-mkdir -p data/input data/output
+```text
+$ map-ip-to-asn -F csv 8.8.8.8 1.1.1.1 1.1.8.9 10.0.0.1
+ip,prefix,asn,origins,snapshot,error
+8.8.8.8,8.8.8.0/24,15169,15169,2026-10-21,
+1.1.1.1,1.1.1.0/24,13335,13335,2026-10-21,
+1.1.8.9,1.1.8.0/24,149511,149511_138421,2026-10-21,
+10.0.0.1,,,,2026-10-21,
+4 addresses: 3 found, 1 not found, 0 invalid (ipv4 2026-10-21; 407.8ms)
 
-# Single IP lookup
-docker run --rm \
-  -v $(pwd)/data/input:/data/input:ro \
-  -v $(pwd)/data/output:/data/output \
-  map-ip-to-asn \
-  --ip 8.8.8.8
+$ map-ip-to-asn --date 2005-06-01 -F csv 8.8.8.8
+ip,prefix,asn,origins,snapshot,error
+8.8.8.8,8.0.0.0/8,3356,3356,2005-06-01,
+1 addresses: 1 found, 0 not found, 0 invalid (ipv4 2005-06-01; 2.0s)
 
-# Batch processing from file
-echo -e "8.8.8.8\n1.1.1.1\n157.92.49.99" > data/input/ips.txt
-docker run --rm \
-  -v $(pwd)/data/input:/data/input:ro \
-  -v $(pwd)/data/output:/data/output \
-  map-ip-to-asn \
-  --file /data/input/ips.txt \
-  --format csv \
-  --output /data/output/results.csv
-
-# Historical lookup with custom date
-docker run --rm \
-  -v $(pwd)/data/input:/data/input:ro \
-  -v $(pwd)/data/output:/data/output \
-  map-ip-to-asn \
-  --file /data/input/ips.txt \
-  --date 2023-01-01 \
-  --format parquet \
-  --output /data/output/historical.parquet
+$ map-ip-to-asn -f ips-1M.txt -F jsonl -o out.jsonl
+1000000 addresses: 836003 found, 163997 not found, 0 invalid (ipv4 2026-10-21; 1.7s)
 ```
 
-#### Option 3: Docker Compose
+The first run for a day downloads the snapshot (about 4 MB for IPv4, 1 MB for IPv6);
+after that the time is loading 1.1 M prefixes into the trie plus the lookups. The 1 M
+figure is one million random IPv4 addresses on a 2023 laptop, snapshot already cached.
 
-Multiple service configurations for different use cases:
+## 🤝 Contributing
 
-```bash
-# Flexible service - pass any arguments
-docker-compose run --rm app --ip 8.8.8.8
-docker-compose run --rm app --file /data/input/ips.txt --format csv --output /data/output/results.csv
+Contributions are welcome. Read [CONTRIBUTING.md](https://github.com/estcarisimo/map-ip-to-asn/blob/main/CONTRIBUTING.md) first, then:
 
-# Pre-configured services with environment variables
-IP=1.1.1.1 FORMAT=json docker-compose run --rm single-ip
-INPUT_FILE=my_ips.txt OUTPUT_FILE=my_results.json docker-compose run --rm batch
-DATE=2023-06-15 INPUT_FILE=ips.txt FORMAT=parquet docker-compose run --rm historical
-```
+1. Fork the repository
+2. Create a branch (`git checkout -b feat/my-change`)
+3. Commit with tests and a `CHANGELOG.md` entry
+4. Push the branch
+5. Open a pull request (every PR is reviewed per `.github/REVIEW.md`)
 
-#### Docker Usage Examples
+## 📄 License
 
-All CLI options work with Docker. Here are comprehensive examples:
+MIT, see [LICENSE](https://github.com/estcarisimo/map-ip-to-asn/blob/main/LICENSE). The data is CAIDA's and keeps
+[its own terms](https://www.caida.org/catalog/datasets/routeviews-prefix2as/).
 
-```bash
-# Using wrapper script (easiest)
-./run-docker.sh --ip 8.8.8.8 --format json
-./run-docker.sh --file ./data/large_ips.txt --format parquet --output ./data/results.parquet
+## 🔗 Related Resources
 
-# Using direct docker command (full control)
-docker run --rm \
-  -v $(pwd)/data/input:/data/input:ro \
-  -v $(pwd)/data/output:/data/output \
-  map-ip-to-asn \
-  --file /data/input/suspicious_ips.txt \
-  --date 2023-03-15 \
-  --format csv \
-  --output /data/output/march_analysis.csv
+- [Documentation site](https://estcarisimo.github.io/map-ip-to-asn/)
+- [CAIDA Routeviews Prefix to AS mappings Dataset (pfx2as)](https://www.caida.org/catalog/datasets/routeviews-prefix2as/)
+- [RouteViews](https://www.routeviews.org/)
+- [CAIDA libipmeta](https://github.com/CAIDA/libipmeta), the C library the 0.x Python version wrapped
 
-# Debug mode (keep container for inspection)
-./run-docker.sh --no-cleanup --file ./data/test.txt
-# Then manually clean up: docker rm map-ip-to-asn-*
+## 🙏 Acknowledgements
 
-# Interactive shell for debugging
-./run-docker.sh --shell
-```
-
-## Development
-
-### Running Tests
-
-```bash
-# Install development dependencies
-uv pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=term-missing
-
-# Run linting
-ruff check src tests
-
-# Run type checking
-mypy src
-```
-
-### Project Structure
-
-```
-map-ip-to-asn/
-├── src/
-│   ├── cli.py           # CLI interface
-│   ├── models.py        # Pydantic data models
-│   ├── lookup.py        # Core lookup logic
-│   ├── providers/       # Lookup provider implementations
-│   └── serializers/     # Output format handlers
-├── tests/               # Unit and integration tests
-├── docker/              # Docker configuration
-└── pyproject.toml       # Project configuration
-```
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-
-1. All tests pass
-2. Code is properly typed (mypy)
-3. Code follows the project style (ruff)
-4. New features include tests
-
-## License
-
-MIT License - see LICENSE file for details
+This tool reads **The CAIDA UCSD Routeviews Prefix to AS mappings Dataset (pfx2as) for
+IPv4 and IPv6**, https://www.caida.org/catalog/datasets/routeviews-prefix2as/, derived
+from RouteViews BGP data. Please cite the dataset in work that uses this tool;
+`CITATION.cff` has the entries for both.

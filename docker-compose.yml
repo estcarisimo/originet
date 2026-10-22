@@ -1,40 +1,13 @@
-version: '3.8'
-
+# docker compose run --rm map-ip-to-asn 8.8.8.8
+# docker compose run --rm map-ip-to-asn --file /data/ips.txt --format csv --output /data/results.csv
+# ./data on the host is /data in the container; downloads persist in the named volume.
 services:
-  # Main service - pass any arguments you want
-  app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
+  map-ip-to-asn:
+    build: .
+    image: map-ip-to-asn:local
     volumes:
-      - ./data/input:/data/input:ro
-      - ./data/output:/data/output
-    environment:
-      - PYTHONUNBUFFERED=1
-    # Override command as needed:
-    # docker-compose run --rm app --ip 8.8.8.8
-    # docker-compose run --rm app --file /data/input/ips.txt --format csv --output /data/output/results.csv
+      - ./data:/data
+      - cache:/cache
 
-  # Quick single IP lookup
-  single-ip:
-    extends: app
-    command: ["--ip", "${IP:-8.8.8.8}", "--format", "${FORMAT:-json}"]
-
-  # Batch file processing  
-  batch:
-    extends: app
-    command: [
-      "--file", "/data/input/${INPUT_FILE:-ips.txt}", 
-      "--format", "${FORMAT:-json}", 
-      "--output", "/data/output/${OUTPUT_FILE:-results.json}"
-    ]
-    
-  # Historical lookup with custom date
-  historical:
-    extends: app  
-    command: [
-      "--file", "/data/input/${INPUT_FILE:-ips.txt}",
-      "--date", "${DATE:-2023-01-01}",
-      "--format", "${FORMAT:-json}",
-      "--output", "/data/output/${OUTPUT_FILE:-results.json}"
-    ]
+volumes:
+  cache:

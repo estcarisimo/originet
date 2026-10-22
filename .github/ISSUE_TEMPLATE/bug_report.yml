@@ -1,0 +1,21 @@
+name: Bug report
+description: The CLI or the Python bindings do something wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: The command or code you ran, what you expected, what you got. Include `--version` / `map_ip_to_asn.__version__`.
+    validations:
+      required: true
+  - type: input
+    id: snapshot
+    attributes:
+      label: Snapshot
+      placeholder: "e.g. routeviews-rv2-20261021-0800.pfx2as.gz, or the --date you asked for"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output with -vv
+      render: shell
