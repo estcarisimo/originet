@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping with map-ip-to-asn. Bugs and proposals go through
-[issues](https://github.com/estcarisimo/map-ip-to-asn/issues); code through pull requests.
+Thanks for helping with originet. Bugs and proposals go through
+[issues](https://github.com/estcarisimo/originet/issues); code through pull requests.
 
 ## Setup
 
 ```bash
-git clone git@github.com:estcarisimo/map-ip-to-asn.git && cd map-ip-to-asn
-cargo build                       # the CLI: target/debug/map-ip-to-asn
+git clone git@github.com:estcarisimo/originet.git && cd originet
+cargo build                       # the CLI: target/debug/originet
 cargo test --workspace --all-features
 cd python && uv sync --locked     # builds the extension in editable mode (needs Rust)
 uv run pytest
@@ -23,13 +23,13 @@ Checks that CI runs, in the same order:
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo clippy -p map-ip-to-asn --all-targets --no-default-features -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc -p map-ip-to-asn --no-deps --all-features
+cargo clippy -p originet --all-targets --no-default-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc -p originet --no-deps --all-features
 cargo deny check                  # cargo install cargo-deny
 cargo test --workspace --all-features --locked
-cargo test -p map-ip-to-asn --no-default-features --locked
+cargo test -p originet --no-default-features --locked
 (cd python && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q)
-docker build -t map-ip-to-asn .
+docker build -t originet .
 uvx --with-requirements docs/requirements.txt mkdocs build --strict
 ```
 
@@ -46,7 +46,7 @@ cache directory. Keep it that way; a test that needs CAIDA is an `#[ignore]` tes
 - American English in identifiers, comments, docs and the changelog.
 - Every documented command is run before it is written down; example output is a real
   capture.
-- A change to the Python API updates `python/map_ip_to_asn/_native.pyi` and
+- A change to the Python API updates `python/originet/_native.pyi` and
   `python/tests/` too.
 - Dependencies: pinned to SHAs in workflows; new crates must pass `cargo deny check`
   (license allow-list in `deny.toml`).
@@ -62,10 +62,10 @@ cache directory. Keep it that way; a test that needs CAIDA is an `#[ignore]` tes
 The release workflow checks that the tag, the four versions and the changelog agree and
 that the tag is on `main`; then it creates the GitHub release with the changelog section,
 attaches binaries (Linux x86_64/aarch64 musl, macOS x86_64/arm64, Windows x86_64), builds
-the wheels and the sdist, and pushes `ghcr.io/estcarisimo/map-ip-to-asn`.
+the wheels and the sdist, and pushes `ghcr.io/estcarisimo/originet`.
 
 Publishing to PyPI and crates.io is off until Trusted Publishing is configured on each
-registry (a *pending publisher* on PyPI for `map-ip-to-asn`, workflow `release.yml`,
+registry (a *pending publisher* on PyPI for `originet`, workflow `release.yml`,
 environment `pypi`; a trusted publisher on crates.io for the crate, environment
 `crates-io`). Turn each one on with a repository variable: `PYPI_PUBLISH=true`,
 `CRATES_IO_PUBLISH=true`.

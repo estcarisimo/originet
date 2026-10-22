@@ -2,7 +2,7 @@
 
 ## Scope
 
-In scope: the `map-ip-to-asn` CLI and Rust library, the Python bindings under `python/`,
+In scope: the `originet` CLI and Rust library, the Python bindings under `python/`,
 the Dockerfile, the Compose file and the GitHub Actions workflows. The data comes from
 CAIDA's public RouteViews prefix-to-AS dataset; problems with the data itself belong to
 [CAIDA](https://www.caida.org/catalog/datasets/routeviews-prefix2as/).
@@ -14,13 +14,13 @@ The latest release on `main`. There are no maintained older branches.
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting:
-https://github.com/estcarisimo/map-ip-to-asn/security/advisories/new. Please include
+https://github.com/estcarisimo/originet/security/advisories/new. Please include
 what is affected, how to reproduce it, the impact, and whether it is already public. You
 will get an acknowledgment within 7 days and an assessment within 14; fixes ship as a
 release. Please allow up to 90 days before public disclosure.
 
 If private reporting is unavailable, contact the maintainer listed in
-`.github/CODEOWNERS` through GitHub with the subject `[map-ip-to-asn security]`.
+`.github/CODEOWNERS` through GitHub with the subject `[originet security]`.
 
 ## What the tool does with the network and the file system
 
@@ -29,8 +29,8 @@ If private reporting is unavailable, contact the maintainer listed in
   `--offline` disables downloads entirely.
 - Downloads go to a temporary file in the cache directory and are renamed into place, so
   an interrupted download never leaves a truncated file behind.
-- The cache directory is the platform cache dir (`~/.cache/map-ip-to-asn` on Linux,
-  `~/Library/Caches/map-ip-to-asn` on macOS), or `--cache-dir` / `MAP_IP_TO_ASN_CACHE_DIR`.
+- The cache directory is the platform cache dir (`~/.cache/originet` on Linux,
+  `~/Library/Caches/originet` on macOS), or `--cache-dir` / `ORIGINET_CACHE_DIR`.
 - Input files are read as text; gzip is detected by magic bytes and decompressed in
   memory in a streaming fashion. The tool never executes anything from its inputs.
 - No telemetry, no other endpoints.

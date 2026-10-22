@@ -1,15 +1,15 @@
 # Rust library
 
-The binary is a thin layer over the `map_ip_to_asn` crate, so the same pieces are
+The binary is a thin layer over the `originet` crate, so the same pieces are
 available to Rust programs. The API documentation is on
-[docs.rs](https://docs.rs/map-ip-to-asn) once the crate is published; until then,
+[docs.rs](https://docs.rs/originet) once the crate is published; until then,
 `cargo doc --open` builds it locally.
 
 ```rust
-use map_ip_to_asn::caida::Family;
-use map_ip_to_asn::fetch::Fetcher;
-use map_ip_to_asn::load;
-use map_ip_to_asn::table::Table;
+use originet::caida::Family;
+use originet::fetch::Fetcher;
+use originet::load;
+use originet::table::Table;
 
 fn main() -> anyhow::Result<()> {
     let fetcher = Fetcher::new("/tmp/pfx2as-cache".into());

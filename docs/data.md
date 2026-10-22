@@ -12,7 +12,7 @@ publishes it as the *Routeviews Prefix to AS mappings Dataset (pfx2as)*:
 
 Each dataset directory also has an index, `pfx2as-creation.log`, listing the files
 published in roughly the last thirty days (`seqnum`, Unix timestamp, path). For older
-days map-ip-to-asn reads the monthly directory listings (`YYYY/MM/`), which exist back
+days originet reads the monthly directory listings (`YYYY/MM/`), which exist back
 to May 2005 for IPv4 and 2007 for IPv6 (the oldest files are named `routeviews-oix-...`).
 
 ## Snapshot selection
@@ -26,9 +26,10 @@ to May 2005 for IPv4 and 2007 for IPv6 (the oldest files are named `routeviews-o
   error that says so; a gap longer than twelve months is an error that says how far back
   it looked.
 
-The index and the current month's listing are cached and reused for six hours, then
-fetched again (`--refresh` forces it). Past months' listings and snapshot files never
-change once published, so they are cached forever.
+The index is cached and reused for six hours, then fetched again (`--refresh` forces
+it). A month's listing is final once it was fetched after that month ended (UTC) and is
+then kept forever; one fetched while the month was still running follows the six-hour
+rule. Snapshot files never change once published, so they are cached forever.
 
 ## The `pfx2as` format
 
@@ -42,7 +43,7 @@ One line per announced prefix, tab-separated:
 ```
 
 The third field is one origin ASN, several joined with `_` (a **multi-origin** prefix,
-MOAS: several ASes announce it) or several joined with `,` (an **AS set**). map-ip-to-asn
+MOAS: several ASes announce it) or several joined with `,` (an **AS set**). originet
 keeps the field verbatim in `origins` and reports the first ASN as `asn`. Nothing in the
 dataset ranks the origins of a MOAS prefix, so treat `asn` as "one of them" and look at
 `origins` (or `Match.asns()` in Python) when it matters.
@@ -62,12 +63,12 @@ addresses, not prefixes.
 
 | Platform | Default directory |
 | --- | --- |
-| Linux | `~/.cache/map-ip-to-asn/` |
-| macOS | `~/Library/Caches/map-ip-to-asn/` |
-| Windows | `%LOCALAPPDATA%\map-ip-to-asn\cache\` |
+| Linux | `~/.cache/originet/` |
+| macOS | `~/Library/Caches/originet/` |
+| Windows | `%LOCALAPPDATA%\originet\cache\` |
 | Docker image | `/cache` |
 
-Override it with `--cache-dir` or `MAP_IP_TO_ASN_CACHE_DIR`. Inside, files mirror
+Override it with `--cache-dir` or `ORIGINET_CACHE_DIR`. Inside, files mirror
 CAIDA's layout: `routeviews-prefix2as/pfx2as-creation.log`,
 `routeviews-prefix2as/2026/10/routeviews-rv2-20261021-0800.pfx2as.gz`, a parsed
 listing per month visited (`routeviews-prefix2as/2015/01/.listing`), and the same

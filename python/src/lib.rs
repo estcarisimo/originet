@@ -8,15 +8,15 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use map_ip_to_asn::caida::Family;
-use map_ip_to_asn::fetch::{FetchError, Fetcher};
-use map_ip_to_asn::input::Item;
-use map_ip_to_asn::load::{self, LoadError};
-use map_ip_to_asn::output::SnapshotInfo;
-use map_ip_to_asn::table;
+use originet::caida::Family;
+use originet::fetch::{FetchError, Fetcher};
+use originet::input::Item;
+use originet::load::{self, LoadError};
+use originet::output::SnapshotInfo;
+use originet::table;
 
 /// The answer for one address: the longest matching prefix and its origin ASN(s).
-#[pyclass(frozen, get_all, module = "map_ip_to_asn")]
+#[pyclass(frozen, get_all, module = "originet")]
 #[derive(Debug, Clone)]
 struct Match {
     /// The address that was looked up, normalized.
@@ -101,7 +101,7 @@ fn parse_address(text: &str) -> PyResult<IpAddr> {
 ///
 /// Build one with `Table.from_files(...)` for local `pfx2as` files or
 /// `Table.from_caida(...)` to download (and cache) CAIDA's snapshots.
-#[pyclass(frozen, module = "map_ip_to_asn")]
+#[pyclass(frozen, module = "originet")]
 struct Table {
     inner: table::Table,
     snapshots: Vec<SnapshotInfo>,
@@ -135,7 +135,7 @@ impl Table {
     ///     Snapshot day. ``None`` means the newest available.
     /// cache_dir : str | os.PathLike | None
     ///     Where indexes and snapshots are kept. ``None`` uses the platform cache
-    ///     directory (or ``MAP_IP_TO_ASN_CACHE_DIR`` when set).
+    ///     directory (or ``ORIGINET_CACHE_DIR`` when set).
     /// ipv4, ipv6 : bool
     ///     Which families to load; at least one must be true.
     /// offline : bool
@@ -253,8 +253,8 @@ impl Table {
                 dict.set_item(
                     "source",
                     match info.source {
-                        map_ip_to_asn::output::Source::Caida => "caida",
-                        map_ip_to_asn::output::Source::Local => "local",
+                        originet::output::Source::Caida => "caida",
+                        originet::output::Source::Local => "local",
                     },
                 )?;
                 dict.set_item("date", info.date.as_deref())?;
@@ -281,10 +281,10 @@ impl Table {
 }
 
 fn default_cache_dir() -> PyResult<PathBuf> {
-    if let Some(dir) = std::env::var_os("MAP_IP_TO_ASN_CACHE_DIR") {
+    if let Some(dir) = std::env::var_os("ORIGINET_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
     }
-    directories::ProjectDirs::from("", "", "map-ip-to-asn")
+    directories::ProjectDirs::from("", "", "originet")
         .map(|dirs| dirs.cache_dir().to_path_buf())
         .ok_or_else(|| PyRuntimeError::new_err("no cache directory could be determined; pass cache_dir="))
 }
@@ -293,6 +293,6 @@ fn default_cache_dir() -> PyResult<PathBuf> {
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Table>()?;
     module.add_class::<Match>()?;
-    module.add("__version__", map_ip_to_asn::VERSION)?;
+    module.add("__version__", originet::VERSION)?;
     Ok(())
 }

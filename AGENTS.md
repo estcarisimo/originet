@@ -21,8 +21,8 @@ There is no Python at runtime; Python exists only as the bindings and the docs t
 | `src/input.rs` | Input parsing (addresses, `/32` and `/128`, IPv4-mapped IPv6, comments) |
 | `src/output.rs` | Records, summary, report; JSON, JSON Lines, CSV, TSV, Parquet writers |
 | `tests/cli.rs`, `tests/fixtures/` | End-to-end tests of the binary; no network |
-| `python/src/lib.rs` | PyO3 module `map_ip_to_asn._native`: `Table`, `Match` |
-| `python/map_ip_to_asn/` | Package, typed stub `_native.pyi`, `py.typed` |
+| `python/src/lib.rs` | PyO3 module `originet._native`: `Table`, `Match` |
+| `python/originet/` | Package, typed stub `_native.pyi`, `py.typed` |
 | `python/tests/` | pytest suite of the bindings |
 | `docs/`, `mkdocs.yml` | Documentation site (MkDocs Material, GitHub Pages) |
 | `.github/` | CI, security, CodeQL, release and Pages workflows; Dependabot; review brief |

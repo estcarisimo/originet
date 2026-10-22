@@ -1,6 +1,6 @@
 # Python
 
-The `map-ip-to-asn` package wraps the Rust table with [PyO3](https://pyo3.rs). It has
+The `originet` package wraps the Rust table with [PyO3](https://pyo3.rs). It has
 no Python dependencies and ships type stubs (`py.typed`).
 
 ## Install
@@ -9,7 +9,7 @@ Not on PyPI yet. From the repository (the extension is compiled, so a Rust toolc
 1.88+ is needed):
 
 ```bash
-uv pip install "map-ip-to-asn @ git+https://github.com/estcarisimo/map-ip-to-asn#subdirectory=python"
+uv pip install "originet @ git+https://github.com/estcarisimo/originet#subdirectory=python"
 ```
 
 Wheels for Linux (x86_64, aarch64, manylinux), macOS (Intel, Apple Silicon) and Windows
@@ -18,7 +18,7 @@ are built by the release workflow and attached to each release.
 ## Loading a table
 
 ```python
-from map_ip_to_asn import Table
+from originet import Table
 
 table = Table.from_caida()                                   # newest IPv4 + IPv6 snapshots
 table = Table.from_caida("2019-06-01", ipv6=False)           # newest on or before that day, IPv4 only
@@ -75,7 +75,7 @@ asns = table.lookup_asns(ips, strict=False)    # invalid inputs become None inst
 
 ```python
 import pandas as pd
-from map_ip_to_asn import Table
+from originet import Table
 
 df = pd.read_csv("flows.csv")
 table = Table.from_caida("2024-01-01")

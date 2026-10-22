@@ -13,8 +13,8 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 fn cmd() -> Command {
-    let mut cmd = Command::cargo_bin("map-ip-to-asn").unwrap();
-    cmd.env_remove("RUST_LOG").env_remove("MAP_IP_TO_ASN_CACHE_DIR");
+    let mut cmd = Command::cargo_bin("originet").unwrap();
+    cmd.env_remove("RUST_LOG").env_remove("ORIGINET_CACHE_DIR");
     cmd
 }
 
@@ -46,7 +46,7 @@ fn json_report_for_mixed_addresses() {
     );
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(report["tool"]["name"], "map-ip-to-asn");
+    assert_eq!(report["tool"]["name"], "originet");
     assert_eq!(report["summary"]["total"], 5);
     assert_eq!(report["summary"]["found"], 3);
     assert_eq!(report["summary"]["not_found"], 1);
@@ -316,5 +316,5 @@ fn help_and_version() {
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::starts_with("map-ip-to-asn "));
+        .stdout(predicate::str::starts_with("originet "));
 }

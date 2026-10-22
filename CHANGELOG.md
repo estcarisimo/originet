@@ -7,8 +7,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [1.0.0] - 2026-10-22
 
-A rewrite in Rust. The tool no longer depends on CAIDA's libipmeta/pyipmeta C stack: it
-reads the `pfx2as` snapshots itself, so it installs as a single binary and runs anywhere.
+A rewrite in Rust, renamed from `map-ip-to-asn` to **originet**. The tool no longer
+depends on CAIDA's libipmeta/pyipmeta C stack: it reads the `pfx2as` snapshots itself and
+ships as one binary with no C library to install.
 
 ### Added
 - Single-binary CLI: addresses from arguments, a file or standard input; IPv4 and IPv6
@@ -16,13 +17,13 @@ reads the `pfx2as` snapshots itself, so it installs as a single binary and runs 
 - Snapshots are resolved through CAIDA's `pfx2as-creation.log` index for recent days and
   the monthly directory listings for older ones: `--date` picks the newest snapshot on or
   before any day since the dataset began (2005), and the default is the newest one.
-- Local cache of indexes and snapshots (`--cache-dir`, `MAP_IP_TO_ASN_CACHE_DIR`), atomic
+- Local cache of indexes and snapshots (`--cache-dir`, `ORIGINET_CACHE_DIR`), atomic
   downloads, `--offline` and `--refresh`.
 - `--pfx2as` / `--pfx2as6` to use local snapshot files (plain or gzip) instead of downloading.
 - Every answer carries the longest matching prefix and all origins in CAIDA's notation
   (`A`, `A_B` multi-origin, `A,B` AS set), plus the snapshot date; the JSON report also
   records the snapshot files, their source and the counts.
-- Rust library (`map_ip_to_asn`) exposing the parser, the prefix table and the fetcher.
+- Rust library (`originet`) exposing the parser, the prefix table and the fetcher.
 - Python bindings (`python/`, PyO3): `Table.from_files`, `Table.from_caida`, `lookup`,
   `lookup_many` and `lookup_asns` (bulk, GIL released), typed stubs.
 - Multi-stage Dockerfile (non-root, cache volume) and Compose file.
@@ -34,6 +35,9 @@ reads the `pfx2as` snapshots itself, so it installs as a single binary and runs 
   issue forms, PR template, `CODEOWNERS`, review brief.
 
 ### Changed
+- Project renamed to `originet` (repository `estcarisimo/originet`; the old URL
+  redirects). The binary, the crate, the Python package and the cache directory follow
+  the new name; the environment variable is `ORIGINET_CACHE_DIR`.
 - `--format` is now `-F/--format` (`-f` is `--file`); `--ip` is gone, addresses are
   positional. `--date` no longer fails for dates without a snapshot in the previous six
   months; it uses the newest earlier snapshot and says so.

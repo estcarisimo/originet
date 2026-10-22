@@ -1,7 +1,7 @@
 name: Docs site
 
 # Builds the documentation site (mkdocs.yml) from main and publishes it to
-# https://estcarisimo.github.io/map-ip-to-asn/. Pull requests only build it, in ci.yml.
+# https://estcarisimo.github.io/originet/. Pull requests only build it, in ci.yml.
 # GitHub Pages must be enabled once with Settings -> Pages -> Source: GitHub Actions.
 
 on:

@@ -19,7 +19,7 @@ One document with the tool version, the snapshots used, the totals and the resul
 
 ```json
 {
-  "tool": { "name": "map-ip-to-asn", "version": "1.0.0" },
+  "tool": { "name": "originet", "version": "1.0.0" },
   "generated_at": "2026-10-22T22:55:08Z",
   "snapshots": [
     {

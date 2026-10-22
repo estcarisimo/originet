@@ -2,11 +2,11 @@
 # Build it with `uvx --with-requirements docs/requirements.txt mkdocs build --strict`
 # (CI does on every PR). The home, changelog, contributing and citing pages include the
 # files at the repository root, so the site and the README cannot drift apart.
-site_name: map-ip-to-asn
+site_name: originet
 site_description: Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots
-site_url: https://estcarisimo.github.io/map-ip-to-asn/
-repo_url: https://github.com/estcarisimo/map-ip-to-asn
-repo_name: estcarisimo/map-ip-to-asn
+site_url: https://estcarisimo.github.io/originet/
+repo_url: https://github.com/estcarisimo/originet
+repo_name: estcarisimo/originet
 edit_uri: edit/main/docs/
 copyright: MIT License. Esteban Carisimo and contributors.
 

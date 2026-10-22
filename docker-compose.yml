@@ -1,10 +1,10 @@
-# docker compose run --rm map-ip-to-asn 8.8.8.8
-# docker compose run --rm map-ip-to-asn --file /data/ips.txt --format csv --output /data/results.csv
+# docker compose run --rm originet 8.8.8.8
+# docker compose run --rm originet --file /data/ips.txt --format csv --output /data/results.csv
 # ./data on the host is /data in the container; downloads persist in the named volume.
 services:
-  map-ip-to-asn:
+  originet:
     build: .
-    image: map-ip-to-asn:local
+    image: originet:local
     volumes:
       - ./data:/data
       - cache:/cache

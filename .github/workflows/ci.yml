@@ -44,9 +44,9 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --all-features
       - name: clippy (no default features)
-        run: cargo clippy -p map-ip-to-asn --all-targets --no-default-features
+        run: cargo clippy -p originet --all-targets --no-default-features
       - name: rustdoc
-        run: cargo doc -p map-ip-to-asn --no-deps --all-features
+        run: cargo doc -p originet --no-deps --all-features
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Validate CITATION.cff
         run: uvx --from cffconvert==2.0.0 cffconvert --validate
@@ -84,7 +84,7 @@ jobs:
       - name: Tests (all features)
         run: cargo test --workspace --all-features --locked
       - name: Tests (no default features)
-        run: cargo test -p map-ip-to-asn --no-default-features --locked
+        run: cargo test -p originet --no-default-features --locked
 
   msrv:
     name: msrv
@@ -150,20 +150,20 @@ jobs:
         with:
           context: .
           load: true
-          tags: map-ip-to-asn:ci
+          tags: originet:ci
           build-args: GIT_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Smoke test
         run: |
-          docker run --rm map-ip-to-asn:ci --version
-          docker run --rm -v "$PWD/tests/fixtures:/fixtures:ro" map-ip-to-asn:ci \
+          docker run --rm originet:ci --version
+          docker run --rm -v "$PWD/tests/fixtures:/fixtures:ro" originet:ci \
             --pfx2as /fixtures/sample-v4.pfx2as.gz --pfx2as6 /fixtures/sample-v6.pfx2as \
             --format csv 8.8.8.8 2001:4860::8888 | tee out.csv
           grep -q '^8.8.8.8,8.8.8.0/24,15169,' out.csv
           grep -q '^2001:4860::8888,2001:4860::/32,15169,' out.csv
           # Runs as a non-root user with a writable cache.
-          test "$(docker run --rm --entrypoint id map-ip-to-asn:ci -u)" = "1000"
+          test "$(docker run --rm --entrypoint id originet:ci -u)" = "1000"
 
   docs:
     name: docs

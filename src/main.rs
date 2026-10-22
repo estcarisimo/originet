@@ -1,4 +1,4 @@
-//! `map-ip-to-asn`: map IP addresses to origin ASNs with CAIDA's RouteViews
+//! `originet`: map IP addresses to origin ASNs with CAIDA's RouteViews
 //! prefix-to-AS snapshots.
 
 use std::fs::File;
@@ -12,12 +12,12 @@ use anyhow::{Context, bail};
 use clap::{ArgAction, Parser};
 use jiff::civil::Date;
 
-use map_ip_to_asn::caida::Family;
-use map_ip_to_asn::fetch::Fetcher;
-use map_ip_to_asn::input::{self, Item};
-use map_ip_to_asn::load;
-use map_ip_to_asn::output::{self, Format, Record, Report, SnapshotInfo, Summary, Tool};
-use map_ip_to_asn::table::Table;
+use originet::caida::Family;
+use originet::fetch::Fetcher;
+use originet::input::{self, Item};
+use originet::load;
+use originet::output::{self, Format, Record, Report, SnapshotInfo, Summary, Tool};
+use originet::table::Table;
 
 /// Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
 ///
@@ -26,7 +26,7 @@ use map_ip_to_asn::table::Table;
 /// use and cached; `--date` picks the newest snapshot on or before a day, and
 /// `--pfx2as`/`--pfx2as6` use local files instead of downloading.
 #[derive(Debug, Parser)]
-#[command(name = "map-ip-to-asn", version, about, long_about, after_help = EXAMPLES)]
+#[command(name = "originet", version, about, long_about, after_help = EXAMPLES)]
 struct Args {
     /// IP addresses to look up (IPv4 or IPv6).
     #[arg(value_name = "IP")]
@@ -57,7 +57,7 @@ struct Args {
     output: Option<PathBuf>,
 
     /// Directory for downloaded indexes and snapshots.
-    #[arg(long, value_name = "DIR", env = "MAP_IP_TO_ASN_CACHE_DIR")]
+    #[arg(long, value_name = "DIR", env = "ORIGINET_CACHE_DIR")]
     cache_dir: Option<PathBuf>,
 
     /// Never download; fail unless the index and snapshot are already cached.
@@ -83,11 +83,11 @@ struct Args {
 
 const EXAMPLES: &str = "\
 Examples:
-  map-ip-to-asn 8.8.8.8 2001:4860::8888
-  map-ip-to-asn --file ips.txt --format csv --output results.csv
-  map-ip-to-asn --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
-  map-ip-to-asn --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
-  cat ips.txt | map-ip-to-asn -f - -F jsonl";
+  originet 8.8.8.8 2001:4860::8888
+  originet --file ips.txt --format csv --output results.csv
+  originet --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
+  originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
+  cat ips.txt | originet -f - -F jsonl";
 
 fn parse_date(text: &str) -> Result<Date, String> {
     text.parse::<Date>()
@@ -170,8 +170,8 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
     let summary = Summary::of(&records);
     let report = Report {
         tool: Tool {
-            name: "map-ip-to-asn",
-            version: map_ip_to_asn::VERSION,
+            name: "originet",
+            version: originet::VERSION,
         },
         generated_at: jiff::Timestamp::now().round(jiff::Unit::Second)?.to_string(),
         snapshots,
@@ -252,7 +252,7 @@ fn cache_dir(explicit: Option<PathBuf>) -> anyhow::Result<PathBuf> {
     if let Some(dir) = explicit {
         return Ok(dir);
     }
-    directories::ProjectDirs::from("", "", "map-ip-to-asn")
+    directories::ProjectDirs::from("", "", "originet")
         .map(|dirs| dirs.cache_dir().to_path_buf())
         .context("no cache directory could be determined; pass --cache-dir")
 }

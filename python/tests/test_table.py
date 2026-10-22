@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from map_ip_to_asn import Match, Table, __version__
+from originet import Match, Table, __version__
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
@@ -123,7 +123,9 @@ def test_from_caida_offline_uses_the_cache(tmp_path: Path) -> None:
         Table.from_caida("2004-12-31", cache_dir=tmp_path, ipv6=False, offline=True)
 
 
-def test_bulk_lookups_from_several_threads(table: Table) -> None:
+def test_bulk_lookups_agree_across_threads(table: Table) -> None:
+    # Checks that concurrent callers get consistent answers; it does not measure
+    # whether the GIL is released (a property of the Rust code, not observable here).
     from concurrent.futures import ThreadPoolExecutor
 
     ips = ["8.8.8.8", "1.1.8.9", "203.0.113.1", "2606:4700::1111"] * 250
@@ -131,3 +133,13 @@ def test_bulk_lookups_from_several_threads(table: Table) -> None:
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda _: table.lookup_asns(ips), range(8)))
     assert all(result == expected for result in results)
+
+
+def test_failed_download_is_a_runtime_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Route the download through a proxy that is not listening, with nothing cached.
+    monkeypatch.setenv("https_proxy", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    with pytest.raises(RuntimeError, match="downloading"):
+        Table.from_caida(cache_dir=tmp_path, ipv6=False)

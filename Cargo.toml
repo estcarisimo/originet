@@ -3,15 +3,15 @@ members = [".", "python"]
 resolver = "3"
 
 [package]
-name = "map-ip-to-asn"
+name = "originet"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or read from a local file"
 license = "MIT"
-repository = "https://github.com/estcarisimo/map-ip-to-asn"
-homepage = "https://estcarisimo.github.io/map-ip-to-asn/"
-documentation = "https://estcarisimo.github.io/map-ip-to-asn/"
+repository = "https://github.com/estcarisimo/originet"
+homepage = "https://estcarisimo.github.io/originet/"
+documentation = "https://estcarisimo.github.io/originet/"
 readme = "README.md"
 keywords = ["asn", "bgp", "caida", "routeviews", "ip"]
 categories = ["command-line-utilities", "network-programming"]
@@ -19,11 +19,11 @@ authors = ["Esteban Carisimo"]
 exclude = ["/.github", "/docs", "/python", "/mkdocs.yml", "/Dockerfile", "/docker-compose.yml", "/deny.toml"]
 
 [[bin]]
-name = "map-ip-to-asn"
+name = "originet"
 path = "src/main.rs"
 
 [lib]
-name = "map_ip_to_asn"
+name = "originet"
 path = "src/lib.rs"
 
 [features]

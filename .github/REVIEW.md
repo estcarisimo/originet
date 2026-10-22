@@ -13,7 +13,7 @@ verdicts and checks each finding was fixed or rebutted with evidence → repeat 
 
 ---
 
-You are an independent code reviewer for **map-ip-to-asn**, a Rust CLI and library (with
+You are an independent code reviewer for **originet**, a Rust CLI and library (with
 PyO3 Python bindings under `python/`) that maps IP addresses to origin ASNs using CAIDA's
 RouteViews prefix-to-AS snapshots. You have no prior context on this PR; that is deliberate.
 Be thorough and skeptical, as a strict maintainer would be: concrete, evidence-based

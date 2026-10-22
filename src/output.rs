@@ -100,7 +100,7 @@ pub struct Report {
 /// Tool identification embedded in the JSON report.
 #[derive(Debug, Clone, Serialize)]
 pub struct Tool {
-    /// `map-ip-to-asn`.
+    /// `originet`.
     pub name: &'static str,
     /// Crate version.
     pub version: &'static str,
@@ -213,7 +213,7 @@ mod parquet_output {
         let batch = RecordBatch::try_new(schema.clone(), columns)?;
         let properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
-            .set_created_by(format!("map-ip-to-asn {}", crate::VERSION))
+            .set_created_by(format!("originet {}", crate::VERSION))
             .build();
         let mut buffer = Vec::new();
         let mut parquet = ArrowWriter::try_new(&mut buffer, schema, Some(properties))?;
@@ -231,7 +231,7 @@ mod tests {
     fn report() -> Report {
         Report {
             tool: Tool {
-                name: "map-ip-to-asn",
+                name: "originet",
                 version: "0.0.0",
             },
             generated_at: "2026-10-22T00:00:00Z".into(),

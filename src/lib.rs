@@ -1,6 +1,6 @@
 //! Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
 //!
-//! The crate is a thin library under the `map-ip-to-asn` binary:
+//! The crate is a thin library under the `originet` binary:
 //!
 //! - [`pfx2as`] parses the `pfx2as` text format CAIDA publishes;
 //! - [`table`] holds a longest-prefix-match table for IPv4 and IPv6;
@@ -23,7 +23,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The `User-Agent` sent to CAIDA, so the data host can tell who is downloading.
 pub const USER_AGENT: &str = concat!(
-    "map-ip-to-asn/",
+    "originet/",
     env!("CARGO_PKG_VERSION"),
-    " (+https://github.com/estcarisimo/map-ip-to-asn)"
+    " (+https://github.com/estcarisimo/originet)"
 );

@@ -3,7 +3,7 @@ requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
 [project]
-name = "map-ip-to-asn"
+name = "originet"
 version = "1.0.0"
 description = "Fast IP-to-ASN lookups (longest-prefix match) on CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or from a local file"
 readme = "README.md"
@@ -24,16 +24,16 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://estcarisimo.github.io/map-ip-to-asn/"
-Documentation = "https://estcarisimo.github.io/map-ip-to-asn/python/"
-Repository = "https://github.com/estcarisimo/map-ip-to-asn"
-Changelog = "https://github.com/estcarisimo/map-ip-to-asn/blob/main/CHANGELOG.md"
+Homepage = "https://estcarisimo.github.io/originet/"
+Documentation = "https://estcarisimo.github.io/originet/python/"
+Repository = "https://github.com/estcarisimo/originet"
+Changelog = "https://github.com/estcarisimo/originet/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.9", "mypy>=1.14"]
 
 [tool.maturin]
-module-name = "map_ip_to_asn._native"
+module-name = "originet._native"
 features = ["pyo3/extension-module"]
 strip = true
 
@@ -49,4 +49,4 @@ testpaths = ["tests"]
 
 [tool.mypy]
 strict = true
-files = ["map_ip_to_asn", "tests"]
+files = ["originet", "tests"]

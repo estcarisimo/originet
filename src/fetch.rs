@@ -41,10 +41,10 @@ pub enum FetchError {
         source: io::Error,
     },
     /// The index could not be parsed.
-    #[error("{url}: {source}")]
+    #[error("{location}: {source}")]
     Index {
-        /// Where the index came from.
-        url: String,
+        /// Where the text came from: the URL when just downloaded, else the cached file.
+        location: String,
         /// The parse error.
         #[source]
         source: IndexError,
@@ -140,6 +140,7 @@ impl Fetcher {
         let path = self.index_path(family);
         let url = family.index_url();
         let cached_is_fresh = !self.refresh_index && Self::is_fresh(&path, INDEX_MAX_AGE);
+        let mut location = path.display().to_string();
         if self.offline {
             if !path.is_file() {
                 return Err(FetchError::Offline {
@@ -152,7 +153,10 @@ impl Fetcher {
             log::info!("using the cached {family} index at {}", path.display());
         } else {
             match self.download(&url, &path) {
-                Ok(bytes) => log::info!("downloaded the {family} index ({bytes} bytes) from {url}"),
+                Ok(bytes) => {
+                    log::info!("downloaded the {family} index ({bytes} bytes) from {url}");
+                    location = url;
+                }
                 Err(error) if path.is_file() => {
                     log::warn!("{error}; using the stale cached index at {}", path.display());
                 }
@@ -163,7 +167,7 @@ impl Fetcher {
             path: path.clone(),
             source,
         })?;
-        Index::parse(family, &text).map_err(|source| FetchError::Index { url, source })
+        Index::parse(family, &text).map_err(|source| FetchError::Index { location, source })
     }
 
     /// The snapshots listed in one month's directory, oldest first; empty when CAIDA has
@@ -375,6 +379,10 @@ mod tests {
         let fetcher = Fetcher::new(dir.path().to_path_buf()).offline(true);
         let index_path = fetcher.index_path(Family::V6);
         fs::create_dir_all(index_path.parent().unwrap()).unwrap();
+        // An unparsable cached index is reported under the cached file, not the URL.
+        fs::write(&index_path, "1\t1\t2026/10/../escape.pfx2as.gz\n").unwrap();
+        let error = fetcher.index(Family::V6).unwrap_err().to_string();
+        assert!(error.starts_with(&index_path.display().to_string()), "{error}");
         fs::write(
             &index_path,
             "4947\t1792670764\t2026/10/routeviews-rv6-20261021-1200.pfx2as.gz\n",

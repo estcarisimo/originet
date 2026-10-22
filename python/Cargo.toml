@@ -1,11 +1,11 @@
 [package]
-name = "map-ip-to-asn-python"
+name = "originet-python"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Python bindings for map-ip-to-asn: fast bulk IP-to-ASN lookups on CAIDA's RouteViews prefix-to-AS snapshots"
+description = "Python bindings for originet: fast bulk IP-to-ASN lookups on CAIDA's RouteViews prefix-to-AS snapshots"
 license = "MIT"
-repository = "https://github.com/estcarisimo/map-ip-to-asn"
+repository = "https://github.com/estcarisimo/originet"
 publish = false
 
 [lib]
@@ -18,7 +18,7 @@ doctest = false
 [dependencies]
 directories = "6.0"
 jiff = "0.2"
-map-ip-to-asn = { path = "..", default-features = false }
+originet = { path = "..", default-features = false }
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
 
 [lints.rust]
