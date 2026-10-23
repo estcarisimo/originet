@@ -39,6 +39,7 @@ Modules:
 | `table` | `Table` holds one longest-prefix-match trie per family; `lookup` returns the prefix and a reference to its origins |
 | `caida` | Dataset URLs, `Index::parse` of the rolling `pfx2as-creation.log`, `parse_listing` of a month's directory page, `Index::on_or_before` |
 | `fetch` | `Fetcher`: cached index (six-hour freshness), cached snapshots, atomic downloads, offline mode |
+| `cache` | `Inventory::scan` lists the cached snapshots with their sizes; `Retention` (`keep_days`, `keep_last`) and `prune` remove the old ones and the directories they empty, with a dry run; `format_bytes` |
 | `load` | `select_snapshot` resolves a date through the index and the monthly listings; `load_local` and `load_caida` fill a table and return a `SnapshotInfo` with the provenance |
 | `input` | `Item::parse` and `read_items` for addresses from text |
 | `output` | `Record`, `Report`, `Summary`, and `write` for every format |

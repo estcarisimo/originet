@@ -20,6 +20,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   each one's date, `downloaded`/`cached` and path; with `--offline` it checks the cache.
 - Library: `fetch::Progress` and `Fetcher::progress` to observe downloads and loads;
   `load::fetch_snapshot` resolves and caches a snapshot without loading it.
+- `--cache list|size|prune`: inspect and prune the cache without deleting by hand.
+  `list` prints every cached snapshot with its family, date, size and path, `size` the
+  count and size per family and in total, and `prune` removes the snapshots that
+  `--keep-days N` (older than N days) and `--keep-last N` (all but the N newest per
+  family) do not keep, then the month and year directories left empty; `--dry-run`
+  only reports. Indexes and files originet did not create are never touched. Library:
+  the `cache` module (`Inventory`, `Retention`, `prune`, `format_bytes`).
 
 ### Changed
 - At a terminal the default output is the table instead of the JSON report; pipes and

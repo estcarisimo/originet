@@ -4,7 +4,7 @@
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, IsTerminal, Write};
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -12,9 +12,11 @@ use anstream::AutoStream;
 use anstream::stream::RawStream;
 use anstyle::{AnsiColor, Style};
 use anyhow::{Context, bail};
-use clap::{ArgAction, Parser};
+use clap::error::ErrorKind;
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use jiff::civil::Date;
 
+use originet::cache::{self, Inventory, Retention, format_bytes};
 use originet::caida::Family;
 use originet::fetch::Fetcher;
 use originet::input::{self, Item};
@@ -30,7 +32,7 @@ mod progress;
 /// standard input (`--file -`). The matching snapshot is downloaded from CAIDA on first
 /// use and cached; `--date` picks the newest snapshot on or before a day, and
 /// `--pfx2as`/`--pfx2as6` use local files instead of downloading. `--fetch` only fills
-/// the cache.
+/// the cache; `--cache list|size|prune` inspects or prunes it.
 #[derive(Debug, Parser)]
 #[command(name = "originet", version, about, long_about, after_help = EXAMPLES)]
 struct Args {
@@ -89,6 +91,33 @@ struct Args {
     )]
     fetch: bool,
 
+    /// Inspect or prune the cache and exit without looking anything up. `list` prints
+    /// one line per cached snapshot (family, date, size, path); `size` prints the
+    /// snapshot count and size per family and in total; `prune` removes the snapshots
+    /// that `--keep-days` and `--keep-last` do not keep (one of them is required) and
+    /// then the month and year directories that are left empty. Indexes and anything
+    /// not placed there by originet are never touched.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "ACTION",
+        conflicts_with_all = ["addresses", "file", "date", "pfx2as", "pfx2as6", "format", "output", "refresh", "fetch", "strict"]
+    )]
+    cache: Option<CacheAction>,
+
+    /// With `--cache prune`: remove the snapshots taken more than N days ago (by the
+    /// day in the file name; `0` keeps only today's).
+    #[arg(long, value_name = "N", requires = "cache")]
+    keep_days: Option<u32>,
+
+    /// With `--cache prune`: keep only the N newest snapshots of each family.
+    #[arg(long, value_name = "N", requires = "cache")]
+    keep_last: Option<usize>,
+
+    /// With `--cache prune`: print what would be removed and remove nothing.
+    #[arg(long, requires = "cache")]
+    dry_run: bool,
+
     /// Exit with status 1 when any input is not an IP address.
     #[arg(long)]
     strict: bool,
@@ -102,6 +131,17 @@ struct Args {
     verbose: u8,
 }
 
+/// What `--cache` does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum CacheAction {
+    /// Every cached snapshot with its family, date, size and path, then a summary
+    List,
+    /// The number of snapshots and the size per family, and in total
+    Size,
+    /// Remove the snapshots `--keep-days`/`--keep-last` do not keep (`--dry-run` only reports)
+    Prune,
+}
+
 const EXAMPLES: &str = "\
 Examples:
   originet 8.8.8.8 2001:4860::8888
@@ -110,7 +150,9 @@ Examples:
   originet --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
   originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
   cat ips.txt | originet -f - -F jsonl
-  originet --fetch --date 2019-06-01";
+  originet --fetch --date 2019-06-01
+  originet --cache list
+  originet --cache prune --keep-days 30 --dry-run";
 
 fn parse_date(text: &str) -> Result<Date, String> {
     text.parse::<Date>()
@@ -119,6 +161,7 @@ fn parse_date(text: &str) -> Result<Date, String> {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    check_cache_args(&args);
     init_logging(args.verbose);
     match run(&args) {
         Ok(code) => code,
@@ -129,6 +172,36 @@ fn main() -> ExitCode {
             let _ = writeln!(stderr, "{style}error:{style:#} {}", render(&error));
             ExitCode::FAILURE
         }
+    }
+}
+
+/// The constraints between `--cache` and its companions that clap cannot express: the
+/// prune flags go only with `--cache prune`, which needs at least one of them. A
+/// violation is a usage error (exit status 2), like any other.
+fn check_cache_args(args: &Args) {
+    let mut command = Args::command();
+    let prune = args.cache == Some(CacheAction::Prune);
+    for (given, flag) in [
+        (args.keep_days.is_some(), "--keep-days"),
+        (args.keep_last.is_some(), "--keep-last"),
+        (args.dry_run, "--dry-run"),
+    ] {
+        if given && !prune {
+            command
+                .error(
+                    ErrorKind::ArgumentConflict,
+                    format!("'{flag}' can only be used with '--cache prune'"),
+                )
+                .exit();
+        }
+    }
+    if prune && args.keep_days.is_none() && args.keep_last.is_none() {
+        command
+            .error(
+                ErrorKind::MissingRequiredArgument,
+                "'--cache prune' requires '--keep-days <N>' and/or '--keep-last <N>'",
+            )
+            .exit();
     }
 }
 
@@ -175,7 +248,11 @@ fn init_logging(verbosity: u8) {
 
 fn run(args: &Args) -> anyhow::Result<ExitCode> {
     let started = Instant::now();
-    let mut fetcher = Fetcher::new(cache_dir(args.cache_dir.clone())?)
+    let cache_dir = cache_dir(args.cache_dir.clone())?;
+    if let Some(action) = args.cache {
+        return cache_command(args, action, &cache_dir, started);
+    }
+    let mut fetcher = Fetcher::new(cache_dir)
         .offline(args.offline)
         .refresh_index(args.refresh);
     let stderr_colors = color_choice(args, &io::stderr());
@@ -290,6 +367,155 @@ fn fetch_snapshots(args: &Args, fetcher: &Fetcher, started: Instant) -> anyhow::
         );
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// `--cache`: list, measure or prune what is cached, and report.
+fn cache_command(
+    args: &Args,
+    action: CacheAction,
+    cache_dir: &Path,
+    started: Instant,
+) -> anyhow::Result<ExitCode> {
+    let inventory = Inventory::scan(cache_dir)?;
+    let mut stdout = AutoStream::new(io::stdout(), color_choice(args, &io::stdout()));
+    match action {
+        CacheAction::List => list_cache(args, &inventory, &mut stdout, started)?,
+        CacheAction::Size => size_cache(&inventory, &mut stdout)?,
+        CacheAction::Prune => prune_cache(args, &inventory, &mut stdout, started)?,
+    }
+    stdout.flush()?;
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `--cache list`: one line per snapshot, then a summary on standard error.
+fn list_cache(
+    args: &Args,
+    inventory: &Inventory,
+    out: &mut impl Write,
+    started: Instant,
+) -> anyhow::Result<()> {
+    let dim = Style::new().dimmed();
+    for snapshot in inventory.snapshots() {
+        writeln!(
+            out,
+            "{}  {}  {:>8}  {dim}{}{dim:#}",
+            snapshot.family,
+            snapshot.date,
+            format_bytes(snapshot.bytes),
+            snapshot.path.display()
+        )?;
+    }
+    if !args.quiet {
+        eprintln!(
+            "{}, {} in {} ({}; {:.1?})",
+            plural(inventory.snapshots().count(), "snapshot"),
+            format_bytes(inventory.bytes()),
+            inventory.cache_dir.display(),
+            per_family(inventory),
+            started.elapsed()
+        );
+    }
+    Ok(())
+}
+
+/// `--cache size`: the count and size per family and in total.
+fn size_cache(inventory: &Inventory, out: &mut impl Write) -> anyhow::Result<()> {
+    let dim = Style::new().dimmed();
+    for family in &inventory.families {
+        writeln!(
+            out,
+            "{:<5}  {:>14}  {:>8}",
+            family.family.to_string(),
+            plural(family.snapshots.len(), "snapshot"),
+            format_bytes(family.bytes)
+        )?;
+    }
+    writeln!(
+        out,
+        "total  {:>14}  {:>8}  {dim}{}{dim:#}",
+        plural(inventory.snapshots().count(), "snapshot"),
+        format_bytes(inventory.bytes()),
+        inventory.cache_dir.display()
+    )?;
+    Ok(())
+}
+
+/// `--cache prune`: one line per snapshot removed (or that would be), then a summary
+/// on standard error.
+fn prune_cache(
+    args: &Args,
+    inventory: &Inventory,
+    out: &mut impl Write,
+    started: Instant,
+) -> anyhow::Result<()> {
+    let retention = Retention {
+        keep_days: args.keep_days,
+        keep_last: args.keep_last,
+    };
+    let today = jiff::Timestamp::now().to_zoned(jiff::tz::TimeZone::UTC).date();
+    let pruned = cache::prune(inventory, retention, today, args.dry_run)?;
+    let (status, style) = if pruned.dry_run {
+        ("would remove", AnsiColor::Yellow.on_default())
+    } else {
+        ("removed", AnsiColor::Red.on_default())
+    };
+    let dim = Style::new().dimmed();
+    for snapshot in &pruned.snapshots {
+        writeln!(
+            out,
+            "{}  {}  {:>8}  {style}{status:<12}{style:#}  {dim}{}{dim:#}",
+            snapshot.family,
+            snapshot.date,
+            format_bytes(snapshot.bytes),
+            snapshot.path.display()
+        )?;
+    }
+    if !args.quiet {
+        let kept = inventory.snapshots().count() - pruned.snapshots.len();
+        let kept_bytes = inventory.bytes() - pruned.bytes();
+        eprintln!(
+            "{} {} ({}), {} kept ({}) in {} ({}; {:.1?})",
+            plural(pruned.snapshots.len(), "snapshot"),
+            if pruned.dry_run {
+                "would be removed"
+            } else {
+                "removed"
+            },
+            format_bytes(pruned.bytes()),
+            kept,
+            format_bytes(kept_bytes),
+            inventory.cache_dir.display(),
+            per_family(&Inventory::scan(&inventory.cache_dir)?),
+            started.elapsed()
+        );
+    }
+    Ok(())
+}
+
+/// `ipv4 3 snapshots 11.7 MB, ipv6 2 snapshots 1.8 MB`, as the cache stands.
+fn per_family(inventory: &Inventory) -> String {
+    inventory
+        .families
+        .iter()
+        .map(|family| {
+            format!(
+                "{} {} {}",
+                family.family,
+                plural(family.snapshots.len(), "snapshot"),
+                format_bytes(family.bytes)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `1 snapshot`, `2 snapshots`.
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("{count} {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
 }
 
 fn collect_items(args: &Args) -> anyhow::Result<Vec<Item>> {
