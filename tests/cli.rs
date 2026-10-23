@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use originet::cache::format_bytes;
 use predicates::prelude::*;
 
 fn fixture(name: &str) -> PathBuf {
@@ -479,25 +480,32 @@ fn seed_cache(root: &std::path::Path) -> Vec<PathBuf> {
         fs::copy(fixture("sample-v4.pfx2as.gz"), &path).unwrap();
         paths.push(path);
     }
+    // Written, not copied from a fixture: git may check a text fixture out with CRLF
+    // line endings on Windows, and the sizes below must be the same on every platform.
     for dataset in ["routeviews-prefix2as", "routeviews6-prefix2as"] {
-        fs::copy(
-            fixture("pfx2as-creation.log"),
-            root.join(dataset).join("pfx2as-creation.log"),
-        )
-        .unwrap();
+        fs::write(root.join(dataset).join("pfx2as-creation.log"), SEED_INDEX).unwrap();
     }
-    fs::write(
-        root.join("routeviews-prefix2as/2015/01/.listing"),
-        "routeviews-rv2-20150101-1200.pfx2as.gz\n",
-    )
-    .unwrap();
+    fs::write(root.join("routeviews-prefix2as/2015/01/.listing"), SEED_LISTING).unwrap();
     paths
+}
+
+const SEED_INDEX: &str = "6777\t1792685687\t2026/10/routeviews-rv2-20261021-0800.pfx2as.gz\n";
+const SEED_LISTING: &str = "routeviews-rv2-20150101-1200.pfx2as.gz\n";
+
+/// The sizes `--cache` reports for the seeded cache: one snapshot, the IPv4 dataset
+/// (three snapshots, the listing, the index) and the IPv6 dataset (one snapshot, the index).
+fn seeded_bytes() -> (u64, u64, u64) {
+    let snapshot = fs::metadata(fixture("sample-v4.pfx2as.gz")).unwrap().len();
+    let index = u64::try_from(SEED_INDEX.len()).unwrap();
+    let listing = u64::try_from(SEED_LISTING.len()).unwrap();
+    (snapshot, 3 * snapshot + listing + index, snapshot + index)
 }
 
 #[test]
 fn cache_list_and_size() {
     let dir = tempfile::tempdir().unwrap();
     let paths = seed_cache(dir.path());
+    let (_, v4, v6) = seeded_bytes();
     // The fixture is 200 bytes; the indexes are 272 each and the listing 39.
     let output = cmd()
         .arg("--cache-dir")
@@ -523,8 +531,12 @@ fn cache_list_and_size() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("4 snapshots, 1.4 KB in")
-            && stderr.contains("(ipv4 3 snapshots 911 B, ipv6 1 snapshot 472 B;"),
+        stderr.contains(&format!("4 snapshots, {} in", format_bytes(v4 + v6)))
+            && stderr.contains(&format!(
+                "(ipv4 3 snapshots {}, ipv6 1 snapshot {};",
+                format_bytes(v4),
+                format_bytes(v6)
+            )),
         "{stderr}"
     );
 
@@ -535,7 +547,16 @@ fn cache_list_and_size() {
         .assert()
         .success()
         .stdout(format!(
-            "ipv4      3 snapshots     911 B\nipv6       1 snapshot     472 B\ntotal     4 snapshots    1.4 KB  {}\n",
+            "{:<5}  {:>14}  {:>8}\n{:<5}  {:>14}  {:>8}\n{:<5}  {:>14}  {:>8}  {}\n",
+            "ipv4",
+            "3 snapshots",
+            format_bytes(v4),
+            "ipv6",
+            "1 snapshot",
+            format_bytes(v6),
+            "total",
+            "4 snapshots",
+            format_bytes(v4 + v6),
             dir.path().display()
         ))
         .stderr("");
@@ -555,6 +576,7 @@ fn cache_list_and_size() {
 fn cache_prune_keep_last_with_a_dry_run_first() {
     let dir = tempfile::tempdir().unwrap();
     let paths = seed_cache(dir.path());
+    let (snapshot, v4_bytes, v6_bytes) = seeded_bytes();
     let v4 = dir.path().join("routeviews-prefix2as");
 
     // The dry run names what would go and touches nothing.
@@ -579,7 +601,11 @@ fn cache_prune_keep_last_with_a_dry_run_first() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.starts_with("2 snapshots would be removed (400 B), 2 kept (983 B) in"),
+        stderr.starts_with(&format!(
+            "2 snapshots would be removed ({}), 2 kept ({}) in",
+            format_bytes(2 * snapshot),
+            format_bytes(v4_bytes + v6_bytes - 2 * snapshot)
+        )),
         "{stderr}"
     );
     assert!(paths.iter().all(|path| path.is_file()));
@@ -606,8 +632,14 @@ fn cache_prune_keep_last_with_a_dry_run_first() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.starts_with("2 snapshots removed (400 B), 2 kept (983 B) in")
-            && stderr.contains("(ipv4 1 snapshot 472 B, ipv6 1 snapshot 472 B;"),
+        stderr.starts_with(&format!(
+            "2 snapshots removed ({}), 2 kept ({}) in",
+            format_bytes(2 * snapshot),
+            format_bytes(v4_bytes + v6_bytes - 2 * snapshot)
+        )) && stderr.contains(&format!(
+            "(ipv4 1 snapshot {v6}, ipv6 1 snapshot {v6};",
+            v6 = format_bytes(v6_bytes)
+        )),
         "{stderr}"
     );
     // The emptied month went with its listing, then the emptied year; the month that
