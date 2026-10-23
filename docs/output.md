@@ -11,11 +11,33 @@ Every format carries the same six columns per input, in input order:
 | `snapshot` | The date of the snapshot that answered (`YYYY-MM-DD`), when known |
 | `error` | Why the input could not be looked up; only set for inputs that are not IP addresses |
 
-Null is `null` in JSON, an empty field in CSV/TSV and a real null in Parquet.
+Null is `null` in JSON, an empty field in CSV/TSV, `-` in the table and a real null in
+Parquet.
 
-## `json` (default)
+Without `-F/--format`, the `table` is used when standard output is a terminal and
+`json` when it is a pipe or `--output` names a file.
 
-One document with the tool version, the snapshots used, the totals and the results.
+## `table`
+
+Aligned columns for reading at the prompt, results only (the snapshots and totals go
+to standard error as the summary line). A missing value is `-`; the `error` column is
+empty unless the input was invalid.
+
+```text
+$ originet 8.8.8.8 2001:4860::8888 1.1.8.9 10.0.0.1 not-an-ip
+ip               prefix             asn  origins        snapshot    error
+8.8.8.8          8.8.8.0/24       15169  15169          2026-10-21
+2001:4860::8888  2001:4860::/32   15169  15169          2026-10-21
+1.1.8.9          1.1.8.0/24      149511  149511_138421  2026-10-21
+10.0.0.1         -                    -  -              2026-10-21
+not-an-ip        -                    -  -              -           invalid IP address syntax
+5 addresses: 3 found, 1 not found, 1 invalid (ipv4 2026-10-21, ipv6 2026-10-21; 1.2s)
+```
+
+## `json`
+
+One document with the tool version, the snapshots used, the totals and the results; the
+default for pipes and files.
 
 ```json
 {
@@ -80,4 +102,6 @@ redirect standard output. Parquet is a default Cargo feature; build with
 
 Standard error gets a one-line summary unless `--quiet`, warnings (for example a
 snapshot date that had to be moved earlier), and with `-v` what is fetched or read from
-the cache. `RUST_LOG` is honored too.
+the cache. `RUST_LOG` is honored too. On a terminal it also shows a progress bar while a
+snapshot downloads and a spinner while it loads, cleared when done; `--quiet` turns them
+off.

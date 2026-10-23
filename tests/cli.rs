@@ -127,6 +127,26 @@ fn reads_a_file_and_stdin() {
 }
 
 #[test]
+fn table_format_and_the_piped_default() {
+    // Standard output is a pipe here, so the default stays JSON; `-F table` is explicit.
+    with_fixtures()
+        .args(["8.8.8.8", "64.9.9.9", "10.0.0.1", "bogus", "-F", "table", "-q"])
+        .assert()
+        .success()
+        .stdout(
+            "\
+ip        prefix        asn  origins      snapshot  error
+8.8.8.8   8.8.8.0/24  15169  15169        -
+64.9.9.9  64.0.0.0/8  64496  64496,64497  -
+10.0.0.1  -               -  -            -
+bogus     -               -  -            -         invalid IP address syntax
+",
+        );
+    let output = with_fixtures().args(["8.8.8.8", "-q"]).output().unwrap();
+    assert!(output.stdout.starts_with(b"{\n"), "piped default is JSON");
+}
+
+#[test]
 fn csv_to_a_file() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("results.csv");
@@ -255,6 +275,71 @@ fn offline_with_a_cached_snapshot_works() {
         .stderr(predicate::str::contains(
             "snapshot routeviews-rv2-20261021-0800.pfx2as.gz is not cached",
         ));
+}
+
+#[test]
+fn fetch_reports_cached_snapshots_and_takes_no_addresses() {
+    let dir = tempfile::tempdir().unwrap();
+    for (dataset, name) in [
+        ("routeviews-prefix2as", "routeviews-rv2-20261020-1000.pfx2as.gz"),
+        ("routeviews6-prefix2as", "routeviews-rv6-20261020-1200.pfx2as.gz"),
+    ] {
+        let dataset = dir.path().join(dataset);
+        fs::create_dir_all(dataset.join("2026/10")).unwrap();
+        fs::write(
+            dataset.join("pfx2as-creation.log"),
+            format!("6776\t1792599333\t2026/10/{name}\n"),
+        )
+        .unwrap();
+        fs::copy(fixture("sample-v4.pfx2as.gz"), dataset.join("2026/10").join(name)).unwrap();
+    }
+    let v4 = dir
+        .path()
+        .join("routeviews-prefix2as/2026/10/routeviews-rv2-20261020-1000.pfx2as.gz");
+    let output = cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--fetch", "--offline"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<_> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{stdout}");
+    assert_eq!(
+        lines[0],
+        format!("ipv4  2026-10-20  cached      {}", v4.display())
+    );
+    assert!(lines[1].starts_with("ipv6  2026-10-20  cached      "), "{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("2 snapshots ready in") && stderr.contains("ipv6 2026-10-20 cached"),
+        "{stderr}"
+    );
+
+    // A snapshot the index lists but the cache lacks is an error offline.
+    fs::remove_file(&v4).unwrap();
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--fetch", "--offline"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "snapshot routeviews-rv2-20261020-1000.pfx2as.gz is not cached",
+        ));
+
+    // Fetching and looking up are different runs.
+    cmd()
+        .args(["--fetch", "8.8.8.8"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"));
+    cmd().args(["--fetch", "--format", "csv"]).assert().code(2);
 }
 
 #[test]

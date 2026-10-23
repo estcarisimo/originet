@@ -7,7 +7,7 @@ Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
 Addresses come from the command line, from a file (`--file`, one per line) or from standard input
 (`--file -`). The matching snapshot is downloaded from CAIDA on first use and cached; `--date` picks
 the newest snapshot on or before a day, and `--pfx2as`/`--pfx2as6` use local files instead of
-downloading.
+downloading. `--fetch` only fills the cache.
 
 Usage: originet [OPTIONS] [IP]...
 
@@ -29,16 +29,15 @@ Options:
           Local IPv6 pfx2as file (plain or gzip) instead of downloading from CAIDA
 
   -F, --format <FORMAT>
-          Output format
+          Output format. Default: `table` on a terminal, `json` when piped or with `--output`
 
           Possible values:
+          - table:   Aligned columns for reading in a terminal, results only
           - json:    One JSON document with metadata, summary and results
           - jsonl:   One JSON object per line, results only
           - csv:     Comma-separated values with a header, results only
           - tsv:     Tab-separated values with a header, results only
           - parquet: Apache Parquet, results only
-          
-          [default: json]
 
   -o, --output <PATH>
           Write the output to this file instead of standard output
@@ -53,6 +52,12 @@ Options:
 
       --refresh
           Re-download the snapshot index even if the cached copy is fresh
+
+      --fetch
+          Download the IPv4 and IPv6 snapshots for the day (`--date`, default the newest) into the
+          cache and exit without looking anything up; print one line per snapshot with its date,
+          whether it was already cached, and its path. With `--offline` it only checks that they are
+          cached
 
       --strict
           Exit with status 1 when any input is not an IP address
@@ -71,10 +76,12 @@ Options:
 
 Examples:
   originet 8.8.8.8 2001:4860::8888
+  originet --format json 8.8.8.8 2001:4860::8888
   originet --file ips.txt --format csv --output results.csv
   originet --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
   originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
   cat ips.txt | originet -f - -F jsonl
+  originet --fetch --date 2019-06-01
 ```
 
 ## Inputs
@@ -97,20 +104,37 @@ same order.
 | `--date 2024-02-29` | the newest one taken on or before 2024-02-29 (a warning names it when the day itself has none) |
 | `--pfx2as FILE` | that file for IPv4 (plain or gzip); the date comes from the file name when it follows CAIDA's naming |
 | `--pfx2as6 FILE` | that file for IPv6 |
+| `--fetch` | downloads the day's IPv4 and IPv6 snapshots into the cache and exits, looking nothing up |
 
 Only the families present in the input are loaded: an IPv4-only input never fetches the
 IPv6 snapshot. `--date` applies to the families fetched from CAIDA; a family read from
 `--pfx2as` or `--pfx2as6` keeps the file's own date, and the tool warns when both are
 given. See [The data](data.md) for how dates are resolved and cached.
 
+`--fetch` fills the cache without a lookup: one line per snapshot on standard output
+with its date, `downloaded` or `cached`, and its path. Run it once (or in a cron job, an
+image build, a CI step) and later lookups for the same day need no network; with
+`--offline` it only checks that the snapshots are there. Addresses, `--file`, `--pfx2as`,
+`--format`, `--output` and `--strict` do not combine with it.
+
+```text
+$ originet --fetch --date 2026-10-19 --cache-dir ./cache
+ipv4  2026-10-19  downloaded  ./cache/routeviews-prefix2as/2026/10/routeviews-rv2-20261019-1200.pfx2as.gz
+ipv6  2026-10-19  downloaded  ./cache/routeviews6-prefix2as/2026/10/routeviews-rv6-20261019-1200.pfx2as.gz
+2 snapshots ready in ./cache (ipv4 2026-10-19 downloaded, ipv6 2026-10-19 downloaded; 6.1s)
+```
+
 ## Outputs
 
-`-F/--format` is `json` (default), `jsonl`, `csv`, `tsv` or `parquet`; `-o/--output`
-writes to a file instead of standard output. Parquet is refused on a terminal. The
-columns are the same in every format; see [Output formats](output.md).
+`-F/--format` is `table`, `json`, `jsonl`, `csv`, `tsv` or `parquet`. Without it, a
+terminal gets the `table` and a pipe or `-o/--output` gets `json`, so `originet 8.8.8.8`
+reads well at the prompt and `originet 8.8.8.8 | jq` keeps working; pass `-F` to choose
+regardless. Parquet is refused on a terminal. The columns are the same in every format;
+see [Output formats](output.md).
 
-Standard error gets a one-line summary (`-q` silences it), warnings, and with `-v` the
-downloads and cache hits.
+Standard error gets a one-line summary, warnings, and with `-v` the downloads and cache
+hits. When it is a terminal, a progress bar shows a snapshot downloading (size, speed,
+time left) and a spinner shows it loading; `-q` silences the summary and the bars.
 
 ## Exit status
 
@@ -128,6 +152,6 @@ originet -F csv -f ips.txt -o now.csv
 originet -F csv -f ips.txt --date 2019-06-01 -o 2019.csv
 
 # Keep a cache in the project and never download during a run
-originet --cache-dir ./cache -f ips.txt -q > /dev/null     # warms the cache
+originet --cache-dir ./cache --fetch                        # warms the cache
 originet --cache-dir ./cache --offline -f ips.txt -F parquet -o out.parquet
 ```

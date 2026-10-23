@@ -19,12 +19,15 @@ use originet::load;
 use originet::output::{self, Format, Record, Report, SnapshotInfo, Summary, Tool};
 use originet::table::Table;
 
+mod progress;
+
 /// Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
 ///
 /// Addresses come from the command line, from a file (`--file`, one per line) or from
 /// standard input (`--file -`). The matching snapshot is downloaded from CAIDA on first
 /// use and cached; `--date` picks the newest snapshot on or before a day, and
-/// `--pfx2as`/`--pfx2as6` use local files instead of downloading.
+/// `--pfx2as`/`--pfx2as6` use local files instead of downloading. `--fetch` only fills
+/// the cache.
 #[derive(Debug, Parser)]
 #[command(name = "originet", version, about, long_about, after_help = EXAMPLES)]
 struct Args {
@@ -48,9 +51,9 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     pfx2as6: Option<PathBuf>,
 
-    /// Output format.
-    #[arg(short = 'F', long, value_enum, default_value_t = Format::Json)]
-    format: Format,
+    /// Output format. Default: `table` on a terminal, `json` when piped or with `--output`.
+    #[arg(short = 'F', long, value_enum, value_name = "FORMAT")]
+    format: Option<Format>,
 
     /// Write the output to this file instead of standard output.
     #[arg(short, long, value_name = "PATH")]
@@ -68,6 +71,16 @@ struct Args {
     #[arg(long, conflicts_with = "offline")]
     refresh: bool,
 
+    /// Download the IPv4 and IPv6 snapshots for the day (`--date`, default the newest)
+    /// into the cache and exit without looking anything up; print one line per snapshot
+    /// with its date, whether it was already cached, and its path. With `--offline` it
+    /// only checks that they are cached.
+    #[arg(
+        long,
+        conflicts_with_all = ["addresses", "file", "pfx2as", "pfx2as6", "format", "output", "strict"]
+    )]
+    fetch: bool,
+
     /// Exit with status 1 when any input is not an IP address.
     #[arg(long)]
     strict: bool,
@@ -84,10 +97,12 @@ struct Args {
 const EXAMPLES: &str = "\
 Examples:
   originet 8.8.8.8 2001:4860::8888
+  originet --format json 8.8.8.8 2001:4860::8888
   originet --file ips.txt --format csv --output results.csv
   originet --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
   originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
-  cat ips.txt | originet -f - -F jsonl";
+  cat ips.txt | originet -f - -F jsonl
+  originet --fetch --date 2019-06-01";
 
 fn parse_date(text: &str) -> Result<Date, String> {
     text.parse::<Date>()
@@ -134,15 +149,21 @@ fn init_logging(verbosity: u8) {
 
 fn run(args: &Args) -> anyhow::Result<ExitCode> {
     let started = Instant::now();
+    let mut fetcher = Fetcher::new(cache_dir(args.cache_dir.clone())?)
+        .offline(args.offline)
+        .refresh_index(args.refresh);
+    if !args.quiet && io::stderr().is_terminal() {
+        fetcher = fetcher.progress(progress::Bars::default());
+    }
+    if args.fetch {
+        return fetch_snapshots(args, &fetcher, started);
+    }
+
     let items = collect_items(args)?;
     if items.is_empty() {
         bail!("no addresses given; pass them as arguments or with --file (see --help)");
     }
     let needs = Needs::of(&items);
-
-    let fetcher = Fetcher::new(cache_dir(args.cache_dir.clone())?)
-        .offline(args.offline)
-        .refresh_index(args.refresh);
 
     let mut table = Table::new();
     let mut snapshots = Vec::new();
@@ -203,6 +224,31 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
     }
     if args.strict && summary.invalid > 0 {
         bail!("{} input(s) were not IP addresses (--strict)", summary.invalid);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `--fetch`: put both families' snapshots for the day in the cache and report them.
+fn fetch_snapshots(args: &Args, fetcher: &Fetcher, started: Instant) -> anyhow::Result<ExitCode> {
+    let mut used = Vec::new();
+    for family in [Family::V4, Family::V6] {
+        let ready = load::fetch_snapshot(fetcher, family, args.date)?;
+        let status = if ready.cached { "cached" } else { "downloaded" };
+        println!(
+            "{family}  {}  {status:<10}  {}",
+            ready.snapshot.date,
+            ready.path.display()
+        );
+        used.push(format!("{family} {} {status}", ready.snapshot.date));
+    }
+    if !args.quiet {
+        eprintln!(
+            "{} snapshots ready in {} ({}; {:.1?})",
+            used.len(),
+            fetcher.cache_dir().display(),
+            used.join(", "),
+            started.elapsed()
+        );
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -294,22 +340,31 @@ fn lookup_all(table: &Table, items: &[Item], snapshots: &[SnapshotInfo]) -> Vec<
         .collect()
 }
 
+/// The format asked for, else `table` for a person at a terminal and `json` for a file
+/// or a pipe.
+fn format(args: &Args) -> Format {
+    args.format.unwrap_or_else(|| {
+        if args.output.is_none() && io::stdout().is_terminal() {
+            Format::Table
+        } else {
+            Format::Json
+        }
+    })
+}
+
 fn write_report(args: &Args, report: &Report) -> anyhow::Result<()> {
+    let format = format(args);
     if let Some(path) = &args.output {
         let file = File::create(path).with_context(|| format!("creating {}", path.display()))?;
         let mut writer = BufWriter::new(file);
-        output::write(args.format, report, &mut writer)
-            .with_context(|| format!("writing {}", path.display()))?;
+        output::write(format, report, &mut writer).with_context(|| format!("writing {}", path.display()))?;
         writer.flush()?;
         return Ok(());
     }
-    if args.format.is_binary() && io::stdout().is_terminal() {
-        bail!(
-            "refusing to write {:?} output to a terminal; use --output or redirect stdout",
-            args.format
-        );
+    if format.is_binary() && io::stdout().is_terminal() {
+        bail!("refusing to write {format:?} output to a terminal; use --output or redirect stdout");
     }
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
-    output::write(args.format, report, &mut writer).context("writing standard output")
+    output::write(format, report, &mut writer).context("writing standard output")
 }

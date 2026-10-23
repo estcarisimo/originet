@@ -109,6 +109,8 @@ pub struct Tool {
 /// The output formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Format {
+    /// Aligned columns for reading in a terminal, results only.
+    Table,
     /// One JSON document with metadata, summary and results.
     Json,
     /// One JSON object per line, results only.
@@ -139,6 +141,7 @@ impl Format {
 /// Writes the report in the chosen format.
 pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow::Result<()> {
     match format {
+        Format::Table => write_table(report, writer)?,
         Format::Json => {
             serde_json::to_writer_pretty(&mut *writer, report)?;
             writer.write_all(b"\n")?;
@@ -155,6 +158,56 @@ pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow:
         Format::Parquet => parquet_output::write(report, writer)?,
     }
     writer.flush()?;
+    Ok(())
+}
+
+/// The six columns, padded to the widest value of each. A missing value is `-`, except
+/// in the `error` column, which is empty unless the input was invalid; the `asn` column
+/// is right-aligned, the last column is not padded.
+fn write_table(report: &Report, writer: &mut dyn Write) -> anyhow::Result<()> {
+    const HEADER: [&str; 6] = ["ip", "prefix", "asn", "origins", "snapshot", "error"];
+    const ASN: usize = 2;
+    let dash = |value: Option<&str>| value.unwrap_or("-").to_owned();
+    let rows: Vec<[String; 6]> = report
+        .results
+        .iter()
+        .map(|record| {
+            [
+                record.ip.clone(),
+                dash(record.prefix.as_deref()),
+                record.asn.map_or_else(|| "-".to_owned(), |asn| asn.to_string()),
+                dash(record.origins.as_deref()),
+                dash(record.snapshot.as_deref()),
+                record.error.clone().unwrap_or_default(),
+            ]
+        })
+        .collect();
+    let mut widths = HEADER.map(str::len);
+    for row in &rows {
+        for (width, cell) in widths.iter_mut().zip(row) {
+            *width = (*width).max(cell.chars().count());
+        }
+    }
+    let header = HEADER.map(str::to_owned);
+    for row in std::iter::once(&header).chain(&rows) {
+        let mut line = String::new();
+        for (index, (cell, width)) in row.iter().zip(widths).enumerate() {
+            if index > 0 {
+                line.push_str("  ");
+            }
+            let padding = width - cell.chars().count();
+            if index == ASN {
+                line.extend(std::iter::repeat_n(' ', padding));
+                line.push_str(cell);
+            } else {
+                line.push_str(cell);
+                if index + 1 < row.len() {
+                    line.extend(std::iter::repeat_n(' ', padding));
+                }
+            }
+        }
+        writeln!(writer, "{}", line.trim_end())?;
+    }
     Ok(())
 }
 
@@ -302,6 +355,23 @@ mod tests {
                 .unwrap()
                 .starts_with("ip\tprefix\tasn\torigins\tsnapshot\terror\n")
         );
+    }
+
+    #[test]
+    fn table_is_aligned_with_dashes_for_nulls() {
+        let mut out = Vec::new();
+        write(Format::Table, &report(), &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(
+            text,
+            "\
+ip        prefix        asn  origins  snapshot    error
+8.8.8.8   8.8.8.0/24  15169  15169    2026-10-21
+10.0.0.1  -               -  -        2026-10-21
+bogus     -               -  -        -           invalid IP address syntax
+"
+        );
+        assert!(!Format::Table.is_binary());
     }
 
     #[test]
