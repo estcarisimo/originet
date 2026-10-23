@@ -576,7 +576,7 @@ fn cache_list_and_size() {
 fn cache_prune_keep_last_with_a_dry_run_first() {
     let dir = tempfile::tempdir().unwrap();
     let paths = seed_cache(dir.path());
-    let (snapshot, v4_bytes, v6_bytes) = seeded_bytes();
+    let (snapshot, _v4_bytes, v6_bytes) = seeded_bytes();
     let v4 = dir.path().join("routeviews-prefix2as");
 
     // The dry run names what would go and touches nothing.
