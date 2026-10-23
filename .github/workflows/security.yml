@@ -1,0 +1,63 @@
+name: Security
+
+# Advisory scan of the locked dependency tree on lock changes and weekly (so advisories
+# published later still surface), and zizmor on the workflow files.
+
+on:
+  push:
+    branches: [main]
+    paths: ["Cargo.lock", "Cargo.toml", "python/Cargo.toml", "python/uv.lock", ".github/workflows/**"]
+  pull_request:
+    paths: ["Cargo.lock", "Cargo.toml", "python/Cargo.toml", "python/uv.lock", ".github/workflows/**"]
+  schedule:
+    - cron: "23 6 * * 1" # Mondays 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisories:
+    name: cargo-deny advisories
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check advisories
+          rust-version: stable
+
+  python-audit:
+    name: pip-audit (python bindings dev tools)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Export the locked requirements
+        working-directory: python
+        run: uv export --locked --no-emit-project --format requirements-txt -o requirements-audit.txt
+      - name: Audit
+        working-directory: python
+        run: uvx pip-audit --strict --desc on --no-deps --disable-pip -r requirements-audit.txt
+
+  workflows:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Lint the workflows
+        run: uvx zizmor --min-severity low .github/workflows/

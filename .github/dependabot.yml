@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo" # the workspace: the CLI crate and the Python bindings crate
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      rust-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "uv" # dev tools of the Python bindings (pytest, ruff, mypy)
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase-if-necessary
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pip" # the documentation site (mkdocs-material)
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    groups:
+      docs:
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker" # the rust and debian base images of the Dockerfile
+    directory: "/"
+    schedule:
+      interval: "weekly"

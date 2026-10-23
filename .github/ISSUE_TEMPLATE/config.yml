@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/estcarisimo/originet/security/advisories/new
+    about: Report privately through GitHub's vulnerability reporting, not as an issue.
+  - name: CAIDA prefix-to-AS dataset
+    url: https://www.caida.org/catalog/datasets/routeviews-prefix2as/
+    about: Questions about the data itself (coverage, dates, licensing) belong to CAIDA.

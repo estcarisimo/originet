@@ -1,0 +1,52 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "originet"
+version = "1.0.0"
+description = "Fast IP-to-ASN lookups (longest-prefix match) on CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or from a local file"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Esteban Carisimo" }]
+keywords = ["asn", "bgp", "caida", "routeviews", "ip", "longest-prefix-match"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Rust",
+  "Topic :: Internet",
+  "Topic :: System :: Networking",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://estcarisimo.github.io/originet/"
+Documentation = "https://estcarisimo.github.io/originet/python/"
+Repository = "https://github.com/estcarisimo/originet"
+Changelog = "https://github.com/estcarisimo/originet/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.9", "mypy>=1.14"]
+
+[tool.maturin]
+module-name = "originet._native"
+features = ["pyo3/extension-module"]
+strip = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+files = ["originet", "tests"]

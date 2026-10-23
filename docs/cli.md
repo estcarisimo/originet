@@ -1,0 +1,133 @@
+# Command line
+
+```text
+$ originet --help
+Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
+
+Addresses come from the command line, from a file (`--file`, one per line) or from standard input
+(`--file -`). The matching snapshot is downloaded from CAIDA on first use and cached; `--date` picks
+the newest snapshot on or before a day, and `--pfx2as`/`--pfx2as6` use local files instead of
+downloading.
+
+Usage: originet [OPTIONS] [IP]...
+
+Arguments:
+  [IP]...
+          IP addresses to look up (IPv4 or IPv6)
+
+Options:
+  -f, --file <PATH>
+          Read addresses from a file, one per line (`-` for standard input)
+
+  -d, --date <YYYY-MM-DD>
+          Use the newest snapshot taken on or before this day (YYYY-MM-DD). Default: the newest
+
+      --pfx2as <PATH>
+          Local IPv4 pfx2as file (plain or gzip) instead of downloading from CAIDA
+
+      --pfx2as6 <PATH>
+          Local IPv6 pfx2as file (plain or gzip) instead of downloading from CAIDA
+
+  -F, --format <FORMAT>
+          Output format
+
+          Possible values:
+          - json:    One JSON document with metadata, summary and results
+          - jsonl:   One JSON object per line, results only
+          - csv:     Comma-separated values with a header, results only
+          - tsv:     Tab-separated values with a header, results only
+          - parquet: Apache Parquet, results only
+          
+          [default: json]
+
+  -o, --output <PATH>
+          Write the output to this file instead of standard output
+
+      --cache-dir <DIR>
+          Directory for downloaded indexes and snapshots
+          
+          [env: ORIGINET_CACHE_DIR=]
+
+      --offline
+          Never download; fail unless the index and snapshot are already cached
+
+      --refresh
+          Re-download the snapshot index even if the cached copy is fresh
+
+      --strict
+          Exit with status 1 when any input is not an IP address
+
+  -q, --quiet
+          Do not print the summary to standard error
+
+  -v, --verbose...
+          More detail on standard error (`-v` what is fetched, `-vv` debugging)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Examples:
+  originet 8.8.8.8 2001:4860::8888
+  originet --file ips.txt --format csv --output results.csv
+  originet --date 2019-06-01 --file ips.txt --format parquet -o june-2019.parquet
+  originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
+  cat ips.txt | originet -f - -F jsonl
+```
+
+## Inputs
+
+Addresses can be given as arguments and, at the same time, from `--file` (one per line;
+blank lines and `#` comments are ignored, also at the end of a line; `-` reads standard
+input). Each one is an IPv4 or IPv6 address, optionally with a `/32` or `/128` host
+suffix; an IPv4-mapped IPv6 address (`::ffff:8.8.8.8`) is looked up as IPv4. Anything
+else is kept in the output as a row with an `error` and counted as *invalid*; `--strict`
+turns that into exit status 1.
+
+Order and duplicates are preserved: the output has exactly one row per input, in the
+same order.
+
+## Which snapshot
+
+| Option | Snapshot used |
+| --- | --- |
+| none | the newest one CAIDA has published |
+| `--date 2024-02-29` | the newest one taken on or before 2024-02-29 (a warning names it when the day itself has none) |
+| `--pfx2as FILE` | that file for IPv4 (plain or gzip); the date comes from the file name when it follows CAIDA's naming |
+| `--pfx2as6 FILE` | that file for IPv6 |
+
+Only the families present in the input are loaded: an IPv4-only input never fetches the
+IPv6 snapshot. `--date` applies to the families fetched from CAIDA; a family read from
+`--pfx2as` or `--pfx2as6` keeps the file's own date, and the tool warns when both are
+given. See [The data](data.md) for how dates are resolved and cached.
+
+## Outputs
+
+`-F/--format` is `json` (default), `jsonl`, `csv`, `tsv` or `parquet`; `-o/--output`
+writes to a file instead of standard output. Parquet is refused on a terminal. The
+columns are the same in every format; see [Output formats](output.md).
+
+Standard error gets a one-line summary (`-q` silences it), warnings, and with `-v` the
+downloads and cache hits.
+
+## Exit status
+
+`0` done (invalid inputs are rows, not failures); `1` an error (no input, unreadable
+file, snapshot not available, `--strict` with invalid inputs); `2` a usage error.
+
+## Examples
+
+```bash
+# Enrich a log: JSON Lines in, JSON Lines out, joined on ip
+cut -d' ' -f1 access.log | sort -u | originet -f - -F jsonl -q > ip2asn.jsonl
+
+# Compare today's and 2019's origin for the same addresses
+originet -F csv -f ips.txt -o now.csv
+originet -F csv -f ips.txt --date 2019-06-01 -o 2019.csv
+
+# Keep a cache in the project and never download during a run
+originet --cache-dir ./cache -f ips.txt -q > /dev/null     # warms the cache
+originet --cache-dir ./cache --offline -f ips.txt -F parquet -o out.parquet
+```

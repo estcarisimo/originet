@@ -1,0 +1,32 @@
+[package]
+name = "originet-python"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Python bindings for originet: fast bulk IP-to-ASN lookups on CAIDA's RouteViews prefix-to-AS snapshots"
+license = "MIT"
+repository = "https://github.com/estcarisimo/originet"
+publish = false
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+doc = false
+test = false
+doctest = false
+
+[dependencies]
+directories = "6.0"
+jiff = "0.2"
+originet = { path = "..", default-features = false }
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+needless_pass_by_value = "allow"
+doc_markdown = "allow"
+fn_params_excessive_bools = "allow"

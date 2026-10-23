@@ -1,0 +1,6 @@
+*
+!Cargo.toml
+!Cargo.lock
+!src/
+!python/Cargo.toml
+!python/src/

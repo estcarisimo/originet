@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use originet in your work, please cite it and CAIDA's prefix-to-AS dataset."
+title: "originet"
+type: software
+version: 1.0.0
+date-released: 2026-10-22
+repository-code: "https://github.com/estcarisimo/originet"
+url: "https://estcarisimo.github.io/originet/"
+license: MIT
+abstract: "Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or read from a local file. Rust CLI and library with Python bindings."
+keywords:
+  - asn
+  - bgp
+  - caida
+  - routeviews
+  - prefix-to-as
+  - longest-prefix-match
+authors:
+  - family-names: Carisimo
+    given-names: Esteban
+references:
+  - type: data
+    title: "The CAIDA UCSD Routeviews Prefix to AS mappings Dataset (pfx2as) for IPv4 and IPv6"
+    authors:
+      - name: "Center for Applied Internet Data Analysis (CAIDA)"
+    url: "https://www.caida.org/catalog/datasets/routeviews-prefix2as/"
