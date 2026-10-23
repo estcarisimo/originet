@@ -147,6 +147,37 @@ bogus     -               -  -            -         invalid IP address syntax
 }
 
 #[test]
+fn color_is_off_in_a_pipe_unless_asked() {
+    // Not a terminal: `auto` and `never` write plain text, `always` writes escapes.
+    for when in ["auto", "never"] {
+        with_fixtures()
+            .args(["8.8.8.8", "bogus", "-F", "table", "--color", when])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\x1b[").not())
+            .stderr(predicate::str::contains("\x1b[").not());
+    }
+    let output = with_fixtures()
+        .args(["8.8.8.8", "bogus", "-F", "table", "--color", "always"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with("\x1b[1mip\x1b[0m"), "{stdout:?}");
+    assert!(stdout.contains("\x1b[31mbogus\x1b[0m"), "{stdout:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("\x1b[1m\x1b[32m1\x1b[0m found") && stderr.contains("\x1b[31m1\x1b[0m invalid"),
+        "{stderr:?}"
+    );
+    // Other formats are never colored.
+    with_fixtures()
+        .args(["8.8.8.8", "-F", "csv", "-q", "--color", "always"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\x1b[").not());
+}
+
+#[test]
 fn csv_to_a_file() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("results.csv");

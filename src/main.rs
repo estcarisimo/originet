@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
+use anstream::AutoStream;
+use anstream::stream::RawStream;
+use anstyle::{AnsiColor, Style};
 use anyhow::{Context, bail};
 use clap::{ArgAction, Parser};
 use jiff::civil::Date;
@@ -16,7 +19,7 @@ use originet::caida::Family;
 use originet::fetch::Fetcher;
 use originet::input::{self, Item};
 use originet::load;
-use originet::output::{self, Format, Record, Report, SnapshotInfo, Summary, Tool};
+use originet::output::{self, Format, Record, Report, SnapshotInfo, Summary, Theme, Tool};
 use originet::table::Table;
 
 mod progress;
@@ -58,6 +61,11 @@ struct Args {
     /// Write the output to this file instead of standard output.
     #[arg(short, long, value_name = "PATH")]
     output: Option<PathBuf>,
+
+    /// Color the table, the summary and the progress bar: `auto` only on a terminal
+    /// (and not with `NO_COLOR`), `always` even into a pipe or file, `never` for plain text.
+    #[arg(long, value_enum, default_value_t = clap::ColorChoice::Auto, value_name = "WHEN")]
+    color: clap::ColorChoice,
 
     /// Directory for downloaded indexes and snapshots.
     #[arg(long, value_name = "DIR", env = "ORIGINET_CACHE_DIR")]
@@ -115,7 +123,10 @@ fn main() -> ExitCode {
     match run(&args) {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("error: {}", render(&error));
+            let mut stderr = AutoStream::new(io::stderr(), color_choice(&args, &io::stderr()));
+            let style = AnsiColor::Red.on_default().bold();
+            // Nothing sensible is left to do if standard error is gone.
+            let _ = writeln!(stderr, "{style}error:{style:#} {}", render(&error));
             ExitCode::FAILURE
         }
     }
@@ -135,6 +146,21 @@ fn render(error: &anyhow::Error) -> String {
     text
 }
 
+/// Whether what goes to `stream` is colored: `--color`, and for `auto` the stream (a
+/// terminal or not, `NO_COLOR`, `TERM=dumb`, `CLICOLOR_FORCE`).
+fn color_choice<S: RawStream>(args: &Args, stream: &S) -> anstream::ColorChoice {
+    match args.color {
+        clap::ColorChoice::Always => anstream::ColorChoice::Always,
+        clap::ColorChoice::Never => anstream::ColorChoice::Never,
+        clap::ColorChoice::Auto => AutoStream::choice(stream),
+    }
+}
+
+/// `style` when `count` is not zero, so a zero stays unremarkable.
+fn count_style(count: usize, style: Style) -> Style {
+    if count > 0 { style } else { Style::new() }
+}
+
 fn init_logging(verbosity: u8) {
     let level = match verbosity {
         0 => log::LevelFilter::Warn,
@@ -152,8 +178,9 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
     let mut fetcher = Fetcher::new(cache_dir(args.cache_dir.clone())?)
         .offline(args.offline)
         .refresh_index(args.refresh);
+    let stderr_colors = color_choice(args, &io::stderr());
     if !args.quiet && io::stderr().is_terminal() {
-        fetcher = fetcher.progress(progress::Bars::default());
+        fetcher = fetcher.progress(progress::Bars::new(stderr_colors != anstream::ColorChoice::Never));
     }
     if args.fetch {
         return fetch_snapshots(args, &fetcher, started);
@@ -208,8 +235,13 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
             .iter()
             .map(|s| format!("{} {}", s.family, s.date.as_deref().unwrap_or(&s.file)))
             .collect();
-        eprintln!(
-            "{} addresses: {} found, {} not found, {} invalid ({}; {:.1?})",
+        let found = count_style(summary.found, AnsiColor::Green.on_default().bold());
+        let not_found = count_style(summary.not_found, AnsiColor::Yellow.on_default());
+        let invalid = count_style(summary.invalid, AnsiColor::Red.on_default());
+        let mut stderr = AutoStream::new(io::stderr(), stderr_colors);
+        writeln!(
+            stderr,
+            "{} addresses: {found}{}{found:#} found, {not_found}{}{not_found:#} not found, {invalid}{}{invalid:#} invalid ({}; {:.1?})",
             summary.total,
             summary.found,
             summary.not_found,
@@ -220,7 +252,7 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
                 used.join(", ")
             },
             started.elapsed()
-        );
+        )?;
     }
     if args.strict && summary.invalid > 0 {
         bail!("{} input(s) were not IP addresses (--strict)", summary.invalid);
@@ -230,17 +262,24 @@ fn run(args: &Args) -> anyhow::Result<ExitCode> {
 
 /// `--fetch`: put both families' snapshots for the day in the cache and report them.
 fn fetch_snapshots(args: &Args, fetcher: &Fetcher, started: Instant) -> anyhow::Result<ExitCode> {
+    let mut stdout = AutoStream::new(io::stdout(), color_choice(args, &io::stdout()));
     let mut used = Vec::new();
     for family in [Family::V4, Family::V6] {
         let ready = load::fetch_snapshot(fetcher, family, args.date)?;
-        let status = if ready.cached { "cached" } else { "downloaded" };
-        println!(
-            "{family}  {}  {status:<10}  {}",
+        let (status, style) = if ready.cached {
+            ("cached", Style::new().dimmed())
+        } else {
+            ("downloaded", AnsiColor::Green.on_default())
+        };
+        writeln!(
+            stdout,
+            "{family}  {}  {style}{status:<10}{style:#}  {}",
             ready.snapshot.date,
             ready.path.display()
-        );
+        )?;
         used.push(format!("{family} {} {status}", ready.snapshot.date));
     }
+    stdout.flush()?;
     if !args.quiet {
         eprintln!(
             "{} snapshots ready in {} ({}; {:.1?})",
@@ -356,15 +395,33 @@ fn write_report(args: &Args, report: &Report) -> anyhow::Result<()> {
     let format = format(args);
     if let Some(path) = &args.output {
         let file = File::create(path).with_context(|| format!("creating {}", path.display()))?;
-        let mut writer = BufWriter::new(file);
-        output::write(format, report, &mut writer).with_context(|| format!("writing {}", path.display()))?;
-        writer.flush()?;
-        return Ok(());
+        let colors = color_choice(args, &file);
+        return write_to(format, report, file, colors).with_context(|| format!("writing {}", path.display()));
     }
     if format.is_binary() && io::stdout().is_terminal() {
         bail!("refusing to write {format:?} output to a terminal; use --output or redirect stdout");
     }
     let stdout = io::stdout();
-    let mut writer = BufWriter::new(stdout.lock());
-    output::write(format, report, &mut writer).context("writing standard output")
+    let colors = color_choice(args, &stdout);
+    write_to(format, report, stdout.lock(), colors).context("writing standard output")
+}
+
+/// Writes the report to `raw`; only the table is ever colored, and then through a
+/// stream that strips or translates the escapes as the destination needs.
+fn write_to<S: RawStream + anstream::stream::AsLockedWrite>(
+    format: Format,
+    report: &Report,
+    raw: S,
+    colors: anstream::ColorChoice,
+) -> anyhow::Result<()> {
+    if format == Format::Table && colors != anstream::ColorChoice::Never {
+        let mut writer = BufWriter::new(AutoStream::new(raw, colors));
+        output::write_table(report, &mut writer, &Theme::colored())?;
+        writer.flush()?;
+    } else {
+        let mut writer = BufWriter::new(raw);
+        output::write(format, report, &mut writer)?;
+        writer.flush()?;
+    }
+    Ok(())
 }

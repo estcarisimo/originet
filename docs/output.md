@@ -21,7 +21,9 @@ Without `-F/--format`, the `table` is used when standard output is a terminal an
 
 Aligned columns for reading at the prompt, results only (the snapshots and totals go
 to standard error as the summary line). A missing value is `-`; the `error` column is
-empty unless the input was invalid.
+empty unless the input was invalid. On a terminal it is colored; `--color never` makes
+it plain and `--color always` keeps the colors in a pipe or a file (see
+[Command line](cli.md#outputs)).
 
 ```text
 $ originet 8.8.8.8 2001:4860::8888 1.1.8.9 10.0.0.1 not-an-ip

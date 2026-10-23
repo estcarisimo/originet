@@ -11,9 +11,18 @@ use originet::fetch::{Progress, Step};
 #[derive(Debug, Default)]
 pub struct Bars {
     current: Mutex<Option<ProgressBar>>,
+    colored: bool,
 }
 
 impl Bars {
+    /// Bars that are colored, or not (`--color never`).
+    pub fn new(colored: bool) -> Self {
+        Self {
+            current: Mutex::new(None),
+            colored,
+        }
+    }
+
     fn swap(&self, bar: Option<ProgressBar>) -> Option<ProgressBar> {
         let mut current = self.current.lock().unwrap_or_else(PoisonError::into_inner);
         std::mem::replace(&mut current, bar)
@@ -28,7 +37,11 @@ impl Progress for Bars {
                 total: Some(total),
             } => (
                 Some(total),
-                "{msg} [{bar:30.cyan/dim}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}",
+                if self.colored {
+                    "{msg} [{bar:30.cyan/dim}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}"
+                } else {
+                    "{msg} [{bar:30}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}"
+                },
                 format!("downloading {file}"),
             ),
             Step::Download { file, total: None } => (
@@ -72,7 +85,12 @@ mod tests {
 
     #[test]
     fn every_step_has_a_valid_template() {
-        let bars = Bars::default();
+        for bars in [Bars::new(true), Bars::new(false)] {
+            exercise(&bars);
+        }
+    }
+
+    fn exercise(bars: &Bars) {
         for step in [
             Step::Download {
                 file: "a.gz",

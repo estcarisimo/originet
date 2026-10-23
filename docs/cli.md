@@ -42,6 +42,13 @@ Options:
   -o, --output <PATH>
           Write the output to this file instead of standard output
 
+      --color <WHEN>
+          Color the table, the summary and the progress bar: `auto` only on a terminal (and not with
+          `NO_COLOR`), `always` even into a pipe or file, `never` for plain text
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
       --cache-dir <DIR>
           Directory for downloaded indexes and snapshots
           
@@ -131,6 +138,12 @@ terminal gets the `table` and a pipe or `-o/--output` gets `json`, so `originet 
 reads well at the prompt and `originet 8.8.8.8 | jq` keeps working; pass `-F` to choose
 regardless. Parquet is refused on a terminal. The columns are the same in every format;
 see [Output formats](output.md).
+
+On a terminal the table is colored (bold header, cyan prefix, bold green ASN, yellow
+multi-origin fields, dim dates and dashes, red invalid inputs), as are the counts of the
+summary line. `--color never` gives plain text, `--color always` keeps the escapes even
+into a pipe or `--output`, and `auto` (the default) also honors `NO_COLOR`,
+`CLICOLOR_FORCE` and `TERM=dumb`. Only the table is ever colored.
 
 Standard error gets a one-line summary, warnings, and with `-v` the downloads and cache
 hits. When it is a terminal, a progress bar shows a snapshot downloading (size, speed,

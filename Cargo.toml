@@ -32,6 +32,8 @@ default = ["parquet"]
 parquet = ["dep:arrow", "dep:parquet"]
 
 [dependencies]
+anstream = "1.0"
+anstyle = "1.0"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
 csv = "1.3"

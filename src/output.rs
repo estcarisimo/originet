@@ -1,7 +1,9 @@
 //! Result records and the output formats.
 
+use std::fmt::Write as _;
 use std::io::Write;
 
+use anstyle::{AnsiColor, Style};
 use serde::Serialize;
 
 use crate::caida::Family;
@@ -141,7 +143,7 @@ impl Format {
 /// Writes the report in the chosen format.
 pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow::Result<()> {
     match format {
-        Format::Table => write_table(report, writer)?,
+        Format::Table => write_table(report, writer, &Theme::plain())?,
         Format::Json => {
             serde_json::to_writer_pretty(&mut *writer, report)?;
             writer.write_all(b"\n")?;
@@ -161,49 +163,105 @@ pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow:
     Ok(())
 }
 
-/// The six columns, padded to the widest value of each. A missing value is `-`, except
-/// in the `error` column, which is empty unless the input was invalid; the `asn` column
-/// is right-aligned, the last column is not padded.
-fn write_table(report: &Report, writer: &mut dyn Write) -> anyhow::Result<()> {
+/// How the `table` format is styled. [`Theme::plain`] renders no escape codes at all;
+/// [`Theme::colored`] is what the binary uses on a terminal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Theme {
+    /// The header line.
+    pub header: Style,
+    /// The `ip` of a valid input.
+    pub ip: Style,
+    /// The matched `prefix`.
+    pub prefix: Style,
+    /// The origin `asn`.
+    pub asn: Style,
+    /// `origins` when it is a single ASN (the same as `asn`).
+    pub origins: Style,
+    /// `origins` when several ASes originate the prefix (`A_B`) or it is an AS set (`A,B`).
+    pub multiple_origins: Style,
+    /// The `snapshot` date.
+    pub snapshot: Style,
+    /// The `-` of a missing value.
+    pub missing: Style,
+    /// An invalid input: its `ip` as typed and the `error`.
+    pub error: Style,
+}
+
+impl Theme {
+    /// No styling.
+    pub fn plain() -> Self {
+        Self::default()
+    }
+
+    /// Bold header, cyan prefix, bold green ASN, yellow multi-origin fields, dim
+    /// snapshot dates and dashes, red invalid inputs.
+    pub fn colored() -> Self {
+        Self {
+            header: Style::new().bold(),
+            ip: Style::new(),
+            prefix: AnsiColor::Cyan.on_default(),
+            asn: AnsiColor::Green.on_default().bold(),
+            origins: Style::new().dimmed(),
+            multiple_origins: AnsiColor::Yellow.on_default(),
+            snapshot: Style::new().dimmed(),
+            missing: Style::new().dimmed(),
+            error: AnsiColor::Red.on_default(),
+        }
+    }
+}
+
+/// The `table` format with a [`Theme`]: the six columns, padded to the widest value of
+/// each. A missing value is `-`, except in the `error` column, which is empty unless
+/// the input was invalid; the `asn` column is right-aligned, the last column is not
+/// padded. Padding is never inside a styled span.
+pub fn write_table(report: &Report, writer: &mut dyn Write, theme: &Theme) -> anyhow::Result<()> {
     const HEADER: [&str; 6] = ["ip", "prefix", "asn", "origins", "snapshot", "error"];
     const ASN: usize = 2;
-    let dash = |value: Option<&str>| value.unwrap_or("-").to_owned();
-    let rows: Vec<[String; 6]> = report
+    let present = |value: Option<&str>, style: Style| match value {
+        Some(value) => (value.to_owned(), style),
+        None => ("-".to_owned(), theme.missing),
+    };
+    let rows: Vec<[(String, Style); 6]> = report
         .results
         .iter()
         .map(|record| {
+            let invalid = record.error.is_some();
+            let origins_style = match &record.origins {
+                Some(origins) if origins.contains(['_', ',']) => theme.multiple_origins,
+                _ => theme.origins,
+            };
             [
-                record.ip.clone(),
-                dash(record.prefix.as_deref()),
-                record.asn.map_or_else(|| "-".to_owned(), |asn| asn.to_string()),
-                dash(record.origins.as_deref()),
-                dash(record.snapshot.as_deref()),
-                record.error.clone().unwrap_or_default(),
+                (record.ip.clone(), if invalid { theme.error } else { theme.ip }),
+                present(record.prefix.as_deref(), theme.prefix),
+                present(record.asn.map(|asn| asn.to_string()).as_deref(), theme.asn),
+                present(record.origins.as_deref(), origins_style),
+                present(record.snapshot.as_deref(), theme.snapshot),
+                (record.error.clone().unwrap_or_default(), theme.error),
             ]
         })
         .collect();
     let mut widths = HEADER.map(str::len);
     for row in &rows {
-        for (width, cell) in widths.iter_mut().zip(row) {
+        for (width, (cell, _)) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.chars().count());
         }
     }
-    let header = HEADER.map(str::to_owned);
+    let header = HEADER.map(|name| (name.to_owned(), theme.header));
     for row in std::iter::once(&header).chain(&rows) {
         let mut line = String::new();
-        for (index, (cell, width)) in row.iter().zip(widths).enumerate() {
+        for (index, ((cell, style), width)) in row.iter().zip(widths).enumerate() {
             if index > 0 {
                 line.push_str("  ");
             }
             let padding = width - cell.chars().count();
             if index == ASN {
                 line.extend(std::iter::repeat_n(' ', padding));
-                line.push_str(cell);
-            } else {
-                line.push_str(cell);
-                if index + 1 < row.len() {
-                    line.extend(std::iter::repeat_n(' ', padding));
-                }
+            }
+            if !cell.is_empty() {
+                write!(line, "{style}{cell}{style:#}")?;
+            }
+            if index != ASN && index + 1 < row.len() {
+                line.extend(std::iter::repeat_n(' ', padding));
             }
         }
         writeln!(writer, "{}", line.trim_end())?;
@@ -372,6 +430,14 @@ bogus     -               -  -        -           invalid IP address syntax
 "
         );
         assert!(!Format::Table.is_binary());
+
+        let mut colored = Vec::new();
+        write_table(&report(), &mut colored, &Theme::colored()).unwrap();
+        let colored = String::from_utf8(colored).unwrap();
+        assert!(colored.starts_with("\x1b[1mip\x1b[0m"), "{colored:?}");
+        assert!(colored.contains("\x1b[1m\x1b[32m15169\x1b[0m"), "{colored:?}");
+        assert!(colored.contains("\x1b[31mbogus\x1b[0m"), "{colored:?}");
+        assert_eq!(anstream::adapter::strip_str(&colored).to_string(), text);
     }
 
     #[test]
