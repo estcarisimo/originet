@@ -5,15 +5,21 @@ no Python dependencies and ships type stubs (`py.typed`).
 
 ## Install
 
-Not on PyPI yet. From the repository (the extension is compiled, so a Rust toolchain
-1.88+ is needed):
+From [PyPI](https://pypi.org/project/originet/):
+
+```bash
+uv pip install originet          # or: pip install originet
+```
+
+Wheels are published for Linux x86_64 (manylinux2014) and aarch64 (manylinux_2_28),
+macOS (Intel, Apple Silicon) and Windows, for CPython 3.10 and newer (abi3), and are
+also attached to each [GitHub release](https://github.com/estcarisimo/originet/releases).
+Anything else falls back to the sdist, which compiles the extension and needs a Rust
+toolchain 1.88+. The repository's `main` installs the same way:
 
 ```bash
 uv pip install "originet @ git+https://github.com/estcarisimo/originet#subdirectory=python"
 ```
-
-Wheels for Linux (x86_64, aarch64, manylinux), macOS (Intel, Apple Silicon) and Windows
-are built by the release workflow and attached to each release.
 
 ## Loading a table
 

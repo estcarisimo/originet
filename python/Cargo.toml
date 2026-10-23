@@ -1,6 +1,6 @@
 [package]
 name = "originet-python"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 rust-version = "1.88"
 description = "Python bindings for originet: fast bulk IP-to-ASN lookups on CAIDA's RouteViews prefix-to-AS snapshots"

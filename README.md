@@ -11,6 +11,7 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 [![Docs](https://img.shields.io/badge/docs-estcarisimo.github.io-blue)](https://estcarisimo.github.io/originet/)
 [![crates.io](https://img.shields.io/crates/v/originet.svg)](https://crates.io/crates/originet)
 [![docs.rs](https://img.shields.io/docsrs/originet)](https://docs.rs/originet)
+[![PyPI](https://img.shields.io/pypi/v/originet.svg)](https://pypi.org/project/originet/)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -58,8 +59,14 @@ and Windows are attached to every
 
 ### Python
 
-The package is not on PyPI yet; install it from the repository (builds the extension,
-so it needs Rust):
+From [PyPI](https://pypi.org/project/originet/), with prebuilt wheels for Linux (x86_64,
+aarch64), macOS (Intel, Apple Silicon) and Windows on Python 3.10 or newer:
+
+```bash
+uv pip install originet          # or: pip install originet
+```
+
+Or the repository's `main` (builds the extension, so it needs Rust 1.88+):
 
 ```bash
 uv pip install "originet @ git+https://github.com/estcarisimo/originet#subdirectory=python"
