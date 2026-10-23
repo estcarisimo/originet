@@ -21,6 +21,7 @@ exclude = [
   "/docs",
   "/python",
   "/mkdocs.yml",
+  "/context7.json",
   "/Dockerfile",
   "/docker-compose.yml",
   "/deny.toml",

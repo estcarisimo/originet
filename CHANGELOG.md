@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Added
+- `context7.json` so Context7 indexes the user documentation in `docs/` and passes short usage rules to coding agents.
+
 ## [1.0.1] - 2026-10-23
 
 The crates.io 1.0.0 was uploaded by hand from a commit that predates the cache commands,
