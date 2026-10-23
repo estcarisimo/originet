@@ -5,37 +5,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
-### Added
-- `--format table`: aligned columns for reading in a terminal, with `-` for missing
-  values and one `asn` column that lists every origin (`149511, 138421` for a
-  multi-origin prefix, `{8035, 13979}` for an AS set). It is the default when standard
-  output is a terminal; `json` stays the default for pipes and `--output`.
-- `--color auto|always|never`: on a terminal the table, the summary counts and the
-  progress bar are colored (`NO_COLOR` honored); `never` gives plain text, `always`
-  keeps the escapes in a pipe or a file. Library: `output::Theme` and `write_table`.
-- A progress bar on standard error while a snapshot downloads (size, speed, time left)
-  and a spinner while it loads, when standard error is a terminal; `--quiet` turns them
-  off.
-- `--fetch`: download the day's IPv4 and IPv6 snapshots into the cache and exit, printing
-  each one's date, `downloaded`/`cached` and path; with `--offline` it checks the cache.
-- Library: `fetch::Progress` and `Fetcher::progress` to observe downloads and loads;
-  `load::fetch_snapshot` resolves and caches a snapshot without loading it.
-- `--cache list|size|prune`: inspect and prune the cache without deleting by hand.
-  `list` prints every cached snapshot with its family, date, size and path, `size` the
-  count and size per family and in total, and `prune` removes the snapshots that
-  `--keep-days N` (older than N days) and `--keep-last N` (all but the N newest per
-  family) do not keep, then the month and year directories left empty; `--dry-run`
-  only reports. Indexes and files originet did not create are never touched. Library:
-  the `cache` module (`Inventory`, `Retention`, `prune`, `format_bytes`).
-
-### Changed
-- At a terminal the default output is the table instead of the JSON report; pipes and
-  files are unchanged.
-- Release workflow: a version already on PyPI or crates.io is skipped instead of failing
-  the run, so the first crates.io upload can be done by hand and the tag still works.
-- Crate tarball no longer carries `AGENTS.md`, `CLAUDE.md` and `.dockerignore`.
-
-## [1.0.0] - 2026-10-22
+## [1.0.0] - 2026-10-23
 
 A rewrite in Rust, renamed from `map-ip-to-asn` to **originet**. The tool no longer
 depends on CAIDA's libipmeta/pyipmeta C stack: it reads the `pfx2as` snapshots itself and
@@ -63,6 +33,27 @@ ships as one binary with no C library to install.
   crates.io Trusted Publishing); MkDocs site on GitHub Pages.
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CITATION.cff`, `AGENTS.md`,
   issue forms, PR template, `CODEOWNERS`, review brief.
+- `--format table`: aligned columns for reading in a terminal, with `-` for missing
+  values and one `asn` column that lists every origin (`149511, 138421` for a
+  multi-origin prefix, `{8035, 13979}` for an AS set). It is the default when standard
+  output is a terminal; `json` stays the default for pipes and `--output`.
+- `--color auto|always|never`: on a terminal the table, the summary counts and the
+  progress bar are colored (`NO_COLOR` honored); `never` gives plain text, `always`
+  keeps the escapes in a pipe or a file. Library: `output::Theme` and `write_table`.
+- A progress bar on standard error while a snapshot downloads (size, speed, time left)
+  and a spinner while it loads, when standard error is a terminal; `--quiet` turns them
+  off.
+- `--fetch`: download the day's IPv4 and IPv6 snapshots into the cache and exit, printing
+  each one's date, `downloaded`/`cached` and path; with `--offline` it checks the cache.
+- Library: `fetch::Progress` and `Fetcher::progress` to observe downloads and loads;
+  `load::fetch_snapshot` resolves and caches a snapshot without loading it.
+- `--cache list|size|prune`: inspect and prune the cache without deleting by hand.
+  `list` prints every cached snapshot with its family, date, size and path, `size` the
+  count and size per family and in total, and `prune` removes the snapshots that
+  `--keep-days N` (older than N days) and `--keep-last N` (all but the N newest per
+  family) do not keep, then the month and year directories left empty; `--dry-run`
+  only reports. Indexes and files originet did not create are never touched. Library:
+  the `cache` module (`Inventory`, `Retention`, `prune`, `format_bytes`).
 
 ### Changed
 - Project renamed to `originet` (repository `estcarisimo/originet`; the old URL
@@ -75,6 +66,11 @@ ships as one binary with no C library to install.
   of `0`. Invalid inputs are reported per row with an `error` field instead of aborting.
 - Output records are flat (`ip`, `prefix`, `asn`, `origins`, `snapshot`, `error`) across
   every format; the per-row `timestamp` and `provider` fields are gone.
+- At a terminal the default output is the table instead of the JSON report; pipes and
+  files are unchanged.
+- Release workflow: a version already on PyPI or crates.io is skipped instead of failing
+  the run, so the first crates.io upload can be done by hand and the tag still works.
+- Crate tarball no longer carries `AGENTS.md`, `CLAUDE.md` and `.dockerignore`.
 
 ### Removed
 - The Python implementation (pydantic models, pandas serializers, pyipmeta provider,
