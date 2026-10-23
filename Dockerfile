@@ -4,7 +4,7 @@
 #   docker run --rm -v originet-cache:/cache originet 8.8.8.8
 # Downloads are cached in /cache (ORIGINET_CACHE_DIR); mount /data for input and output files.
 
-FROM rust:1.91-bookworm AS build
+FROM rust:1.98-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
