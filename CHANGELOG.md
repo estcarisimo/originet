@@ -31,6 +31,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ### Changed
 - At a terminal the default output is the table instead of the JSON report; pipes and
   files are unchanged.
+- Release workflow: a version already on PyPI or crates.io is skipped instead of failing
+  the run, so the first crates.io upload can be done by hand and the tag still works.
+- Crate tarball no longer carries `AGENTS.md`, `CLAUDE.md` and `.dockerignore`.
 
 ## [1.0.0] - 2026-10-22
 
