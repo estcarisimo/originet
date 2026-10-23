@@ -2,10 +2,9 @@ name: Release
 
 # On a `v*` tag: check the tag matches the version and sits on main, create the GitHub
 # release with the changelog section, attach prebuilt binaries for Linux, macOS and
-# Windows and the Python wheels, push the image to GHCR, and publish to crates.io
-# when the repository variable CRATES_IO_PUBLISH is "true" (Trusted Publishing on
-# crates.io first; see CONTRIBUTING.md). PyPI is published by publish-pypi.yml, which
-# runs when a release is published or when someone starts that workflow by hand.
+# Windows and the Python wheels, push the image to GHCR, and publish to PyPI and
+# crates.io when the repository variables PYPI_PUBLISH / CRATES_IO_PUBLISH are "true"
+# (both need Trusted Publishing configured on the registry first; see CONTRIBUTING.md).
 
 on:
   push:
@@ -166,6 +165,28 @@ jobs:
         run: |
           ls -l dist
           gh release upload "$TAG" dist/*.whl dist/*.tar.gz --repo "$REPO" --clobber
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [wheels, sdist]
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/originet/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist
+          # A version uploaded by hand (or by a re-run) is not an error.
+          skip-existing: true
 
   publish-crate:
     name: publish to crates.io

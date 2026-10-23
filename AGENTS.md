@@ -26,7 +26,7 @@ There is no Python at runtime; Python exists only as the bindings and the docs t
 | `python/originet/` | Package, typed stub `_native.pyi`, `py.typed` |
 | `python/tests/` | pytest suite of the bindings |
 | `docs/`, `mkdocs.yml` | Documentation site (MkDocs Material, GitHub Pages) |
-| `.github/` | CI, security, CodeQL, release, PyPI, and Pages workflows; Dependabot; review brief |
+| `.github/` | CI, security, CodeQL, release and Pages workflows; Dependabot; review brief |
 
 ## Commands
 
