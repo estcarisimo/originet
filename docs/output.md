@@ -49,7 +49,7 @@ default for pipes and files.
 
 ```json
 {
-  "tool": { "name": "originet", "version": "1.0.0" },
+  "tool": { "name": "originet", "version": "1.0.1" },
   "generated_at": "2026-10-22T22:55:08Z",
   "snapshots": [
     {
