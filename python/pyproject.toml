@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "originet"
-version = "1.0.0"
+version = "1.0.1"
 description = "Fast IP-to-ASN lookups (longest-prefix match) on CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or from a local file"
 readme = "README.md"
 license = "MIT"

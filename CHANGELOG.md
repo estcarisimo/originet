@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-23
+
+The crates.io 1.0.0 was uploaded by hand from a commit that predates the cache commands,
+so `cargo install originet` lacked `--cache` while the release binaries and the Python
+wheels had it. 1.0.1 brings every channel to the same code, and it is the first version
+published to crates.io and PyPI by the release workflow through Trusted Publishing.
+
 ### Added
 - The documentation site serves `/llms.txt` and `/llms-full.txt` for AI agents.
   The README links to them.
