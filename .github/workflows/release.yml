@@ -105,10 +105,11 @@ jobs:
       matrix:
         include:
           - { name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: auto }
-          # manylinux2014's aarch64 cross GCC cannot assemble ring's ARMv8 sources
-          # ("ARM assembler must define __ARM_ARCH"); the 2_28 image has a current
-          # toolchain, and the CFLAGS define covers it either way.
-          - { name: linux-aarch64, os: ubuntu-latest, target: aarch64, manylinux: 2_28, docker-options: "-e CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" }
+          # manylinux2014's aarch64 cross GCC (4.8.5) does not define __ARM_ARCH and
+          # cannot assemble ring's ARMv8 sources; the 2_28 image ships GCC 7.5, which
+          # does, and the CFLAGS define covers it either way. This wheel's floor is
+          # therefore glibc 2.28 (manylinux_2_28); the x86_64 one stays on 2014.
+          - { name: linux-aarch64, os: ubuntu-latest, target: aarch64, manylinux: "2_28", docker-options: "-e CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" }
           - { name: macos-x86_64, os: macos-latest, target: x86_64 }
           - { name: macos-aarch64, os: macos-latest, target: aarch64 }
           - { name: windows-x86_64, os: windows-latest, target: x64 }
