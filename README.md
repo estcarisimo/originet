@@ -9,6 +9,8 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 [![Security](https://github.com/estcarisimo/originet/actions/workflows/security.yml/badge.svg)](https://github.com/estcarisimo/originet/actions/workflows/security.yml)
 [![CodeQL](https://github.com/estcarisimo/originet/actions/workflows/codeql.yml/badge.svg)](https://github.com/estcarisimo/originet/actions/workflows/codeql.yml)
 [![Docs](https://img.shields.io/badge/docs-estcarisimo.github.io-blue)](https://estcarisimo.github.io/originet/)
+[![crates.io](https://img.shields.io/crates/v/originet.svg)](https://crates.io/crates/originet)
+[![docs.rs](https://img.shields.io/docsrs/originet)](https://docs.rs/originet)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -30,11 +32,17 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 
 ### CLI
 
-With a Rust toolchain (1.88 or newer):
+From [crates.io](https://crates.io/crates/originet), with a Rust toolchain (1.88 or newer):
+
+```bash
+cargo install originet --locked
+originet 8.8.8.8 2001:4860::8888
+```
+
+The same from the repository's `main` instead of the latest release:
 
 ```bash
 cargo install --git https://github.com/estcarisimo/originet --locked
-originet 8.8.8.8 2001:4860::8888
 ```
 
 Or from source:

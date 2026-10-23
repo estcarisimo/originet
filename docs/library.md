@@ -1,9 +1,8 @@
 # Rust library
 
-The binary is a thin layer over the `originet` crate, so the same pieces are
-available to Rust programs. The API documentation is on
-[docs.rs](https://docs.rs/originet) once the crate is published; until then,
-`cargo doc --open` builds it locally.
+The binary is a thin layer over the `originet` crate, so the same pieces are available
+to Rust programs: `cargo add originet` and read the API documentation on
+[docs.rs](https://docs.rs/originet).
 
 ```rust
 use originet::caida::Family;
