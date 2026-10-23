@@ -17,6 +17,7 @@ There is no Python at runtime; Python exists only as the bindings and the docs t
 | `src/table.rs` | Longest-prefix-match table (prefix-trie) for IPv4 and IPv6 |
 | `src/caida.rs` | Dataset layout on `publicdata.caida.org`, index parsing, snapshot selection by date |
 | `src/fetch.rs` | Cached downloads (index freshness, atomic snapshot download, offline mode) |
+| `src/cache.rs` | Inventory of the cache (snapshots, sizes) and pruning by age or count |
 | `src/load.rs` | Fills a table from a local file or from CAIDA and records the provenance |
 | `src/input.rs` | Input parsing (addresses, `/32` and `/128`, IPv4-mapped IPv6, comments) |
 | `src/output.rs` | Records, summary, report; table, JSON, JSON Lines, CSV, TSV, Parquet writers |

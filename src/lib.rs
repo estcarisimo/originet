@@ -6,10 +6,12 @@
 //! - [`table`] holds a longest-prefix-match table for IPv4 and IPv6;
 //! - [`caida`] knows the dataset layout on `publicdata.caida.org` and picks a snapshot by date;
 //! - [`fetch`] downloads the index and the snapshots into a local cache;
+//! - [`cache`] lists what the cache holds and prunes it;
 //! - [`load`] fills a table from a local file or from CAIDA and records where it came from;
 //! - [`input`] reads and validates the addresses to look up;
 //! - [`output`] serializes results as JSON, JSON Lines, CSV, TSV or Parquet.
 
+pub mod cache;
 pub mod caida;
 pub mod fetch;
 pub mod input;

@@ -180,6 +180,29 @@ impl Snapshot {
     }
 }
 
+/// The date of a snapshot file name that follows CAIDA's naming for `family` exactly:
+/// `routeviews-rv2-YYYYMMDD-HHMM.pfx2as.gz` (or the 2005 `routeviews-oix-` form) for IPv4
+/// and `routeviews-rv6-YYYYMMDD-HHMM.pfx2as.gz` for IPv6. Anything else, including a
+/// file that merely contains a date, is `None`; the cache uses this to tell its own
+/// snapshots from files it did not create.
+pub fn snapshot_file_name_date(family: Family, name: &str) -> Option<Date> {
+    let prefixes: &[&str] = match family {
+        Family::V4 => &["routeviews-rv2-", "routeviews-oix-"],
+        Family::V6 => &["routeviews-rv6-"],
+    };
+    let rest = prefixes.iter().find_map(|prefix| name.strip_prefix(prefix))?;
+    let rest = rest.strip_suffix(".pfx2as.gz")?;
+    let (digits, time) = rest.split_once('-')?;
+    let all_digits = |s: &str, n: usize| s.len() == n && s.bytes().all(|b| b.is_ascii_digit());
+    if !all_digits(digits, 8) || !all_digits(time, 4) {
+        return None;
+    }
+    let year: i16 = digits[0..4].parse().ok()?;
+    let month: i8 = digits[4..6].parse().ok()?;
+    let day: i8 = digits[6..8].parse().ok()?;
+    Date::new(year, month, day).ok()
+}
+
 /// Parses the date out of a snapshot file name like `routeviews-rv2-20261021-0800.pfx2as.gz`.
 pub fn date_from_file_name(name: &str) -> Option<Date> {
     name.split('-')
@@ -432,6 +455,35 @@ mod tests {
             date(2015, 1, 2)
         );
         assert_eq!(newest_on_or_before(&cached, date(2014, 12, 31)), None);
+    }
+
+    #[test]
+    fn strict_file_names_per_family() {
+        assert_eq!(
+            snapshot_file_name_date(Family::V4, "routeviews-rv2-20261021-0800.pfx2as.gz"),
+            Some(date(2026, 10, 21))
+        );
+        assert_eq!(
+            snapshot_file_name_date(Family::V4, "routeviews-oix-20050509-1200.pfx2as.gz"),
+            Some(date(2005, 5, 9))
+        );
+        assert_eq!(
+            snapshot_file_name_date(Family::V6, "routeviews-rv6-20261021-1200.pfx2as.gz"),
+            Some(date(2026, 10, 21))
+        );
+        for (family, name) in [
+            (Family::V4, "routeviews-rv6-20261021-1200.pfx2as.gz"),
+            (Family::V6, "routeviews-rv2-20261021-0800.pfx2as.gz"),
+            (Family::V4, "my-20180101-notes.pfx2as.gz"),
+            (Family::V4, "routeviews-rv2-20261021-0800.pfx2as"),
+            (Family::V4, "routeviews-rv2-20261021.pfx2as.gz"),
+            (Family::V4, "routeviews-rv2-2026102-0800.pfx2as.gz"),
+            (Family::V4, "routeviews-rv2-20261321-0800.pfx2as.gz"),
+            (Family::V4, "routeviews-rv2-20261021-0800.pfx2as.gz.bak"),
+            (Family::V4, ".routeviews-rv2-20261021-0800.pfx2as.gz"),
+        ] {
+            assert_eq!(snapshot_file_name_date(family, name), None, "{family} {name}");
+        }
     }
 
     #[test]
