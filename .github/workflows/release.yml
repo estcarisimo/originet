@@ -185,6 +185,8 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist
+          # A version uploaded by hand (or by a re-run) is not an error.
+          skip-existing: true
 
   publish-crate:
     name: publish to crates.io
@@ -205,9 +207,26 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable
         with:
           toolchain: stable
+      # The first version of a crate must be uploaded by hand (crates.io has no pending
+      # publisher), so a version that is already there is skipped, not failed.
+      - name: Already on crates.io?
+        id: exists
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' -A "originet release workflow (+https://github.com/${GITHUB_REPOSITORY})" "https://crates.io/api/v1/crates/originet/${VERSION}")
+          echo "crates.io answered $status for originet ${VERSION}"
+          if [ "$status" = "200" ]; then
+            echo "::notice::originet ${VERSION} is already on crates.io; nothing to publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        if: steps.exists.outputs.exists == 'false'
         id: auth
       - run: cargo publish -p originet --locked
+        if: steps.exists.outputs.exists == 'false'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
