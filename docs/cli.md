@@ -32,7 +32,8 @@ Options:
           Output format. Default: `table` on a terminal, `json` when piped or with `--output`
 
           Possible values:
-          - table:   Aligned columns for reading in a terminal, results only
+          - table:   Aligned columns for reading in a terminal, results only; `asn` lists every
+            origin
           - json:    One JSON document with metadata, summary and results
           - jsonl:   One JSON object per line, results only
           - csv:     Comma-separated values with a header, results only
@@ -139,9 +140,11 @@ reads well at the prompt and `originet 8.8.8.8 | jq` keeps working; pass `-F` to
 regardless. Parquet is refused on a terminal. The columns are the same in every format;
 see [Output formats](output.md).
 
-On a terminal the table is colored (bold header, cyan prefix, bold green ASN, yellow
-multi-origin fields, dim dates and dashes, red invalid inputs), as are the counts of the
-summary line. `--color never` gives plain text, `--color always` keeps the escapes even
+The table has five columns: `asn` lists every origin of the prefix (`149511, 138421`
+for a multi-origin prefix, `{8035, 13979}` for an AS set) in place of the separate `asn`
+and `origins` of the other formats. On a terminal it is colored (bold header, cyan
+prefix, bold green ASN, yellow multi-origin lists, dim dates and dashes, red invalid
+inputs), as are the counts of the summary line. `--color never` gives plain text, `--color always` keeps the escapes even
 into a pipe or `--output`, and `auto` (the default) also honors `NO_COLOR`,
 `CLICOLOR_FORCE` and `TERM=dumb`. Only the table is ever colored.
 

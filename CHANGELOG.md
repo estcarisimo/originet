@@ -7,8 +7,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ### Added
 - `--format table`: aligned columns for reading in a terminal, with `-` for missing
-  values. It is the default when standard output is a terminal; `json` stays the default
-  for pipes and `--output`.
+  values and one `asn` column that lists every origin (`149511, 138421` for a
+  multi-origin prefix, `{8035, 13979}` for an AS set). It is the default when standard
+  output is a terminal; `json` stays the default for pipes and `--output`.
 - `--color auto|always|never`: on a terminal the table, the summary counts and the
   progress bar are colored (`NO_COLOR` honored); `never` gives plain text, `always`
   keeps the escapes in a pipe or a file. Library: `output::Theme` and `write_table`.

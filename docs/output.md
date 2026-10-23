@@ -12,7 +12,8 @@ Every format carries the same six columns per input, in input order:
 | `error` | Why the input could not be looked up; only set for inputs that are not IP addresses |
 
 Null is `null` in JSON, an empty field in CSV/TSV, `-` in the table and a real null in
-Parquet.
+Parquet. The table is the one exception to the six columns: being for people, it folds
+`origins` into `asn` and shows every origin there.
 
 Without `-F/--format`, the `table` is used when standard output is a terminal and
 `json` when it is a pipe or `--output` names a file.
@@ -20,20 +21,25 @@ Without `-F/--format`, the `table` is used when standard output is a terminal an
 ## `table`
 
 Aligned columns for reading at the prompt, results only (the snapshots and totals go
-to standard error as the summary line). A missing value is `-`; the `error` column is
-empty unless the input was invalid. On a terminal it is colored; `--color never` makes
-it plain and `--color always` keeps the colors in a pipe or a file (see
-[Command line](cli.md#outputs)).
+to standard error as the summary line). Five columns: `ip`, `prefix`, `asn`, `snapshot`,
+`error`. Instead of the first origin, `asn` lists every origin of the prefix, so a
+multi-origin prefix (`149511_138421` in CAIDA's notation) reads `149511, 138421` and an
+AS set (`8035,13979`) reads `{8035, 13979}`, BGP's own notation for a set; the full
+`origins` string is in the other formats. A missing value is `-`; the `error` column is
+empty unless the input was invalid. On a terminal it is colored (multi-origin lists in
+yellow); `--color never` makes it plain and `--color always` keeps the colors in a pipe
+or a file (see [Command line](cli.md#outputs)).
 
 ```text
-$ originet 8.8.8.8 2001:4860::8888 1.1.8.9 10.0.0.1 not-an-ip
-ip               prefix             asn  origins        snapshot    error
-8.8.8.8          8.8.8.0/24       15169  15169          2026-10-21
-2001:4860::8888  2001:4860::/32   15169  15169          2026-10-21
-1.1.8.9          1.1.8.0/24      149511  149511_138421  2026-10-21
-10.0.0.1         -                    -  -              2026-10-21
-not-an-ip        -                    -  -              -           invalid IP address syntax
-5 addresses: 3 found, 1 not found, 1 invalid (ipv4 2026-10-21, ipv6 2026-10-21; 1.2s)
+$ originet 8.8.8.8 2001:4860::8888 1.1.8.9 15.0.64.1 10.0.0.1 not-an-ip
+ip               prefix                     asn  snapshot    error
+8.8.8.8          8.8.8.0/24               15169  2026-10-21
+2001:4860::8888  2001:4860::/32           15169  2026-10-21
+1.1.8.9          1.1.8.0/24      149511, 138421  2026-10-21
+15.0.64.1        15.0.64.0/18     {8035, 13979}  2026-10-21
+10.0.0.1         -                            -  2026-10-21
+not-an-ip        -                            -  -           invalid IP address syntax
+6 addresses: 4 found, 1 not found, 1 invalid (ipv4 2026-10-21, ipv6 2026-10-21; 1.2s)
 ```
 
 ## `json`

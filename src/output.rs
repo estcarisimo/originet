@@ -111,7 +111,7 @@ pub struct Tool {
 /// The output formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Format {
-    /// Aligned columns for reading in a terminal, results only.
+    /// Aligned columns for reading in a terminal, results only; `asn` lists every origin.
     Table,
     /// One JSON document with metadata, summary and results.
     Json,
@@ -173,11 +173,10 @@ pub struct Theme {
     pub ip: Style,
     /// The matched `prefix`.
     pub prefix: Style,
-    /// The origin `asn`.
+    /// The `asn` column when one AS originates the prefix.
     pub asn: Style,
-    /// `origins` when it is a single ASN (the same as `asn`).
-    pub origins: Style,
-    /// `origins` when several ASes originate the prefix (`A_B`) or it is an AS set (`A,B`).
+    /// The `asn` column when several ASes originate the prefix (a MOAS) or the origin
+    /// is an AS set.
     pub multiple_origins: Style,
     /// The `snapshot` date.
     pub snapshot: Style,
@@ -193,7 +192,7 @@ impl Theme {
         Self::default()
     }
 
-    /// Bold header, cyan prefix, bold green ASN, yellow multi-origin fields, dim
+    /// Bold header, cyan prefix, bold green ASN, yellow multi-origin lists, dim
     /// snapshot dates and dashes, red invalid inputs.
     pub fn colored() -> Self {
         Self {
@@ -201,7 +200,6 @@ impl Theme {
             ip: Style::new(),
             prefix: AnsiColor::Cyan.on_default(),
             asn: AnsiColor::Green.on_default().bold(),
-            origins: Style::new().dimmed(),
             multiple_origins: AnsiColor::Yellow.on_default(),
             snapshot: Style::new().dimmed(),
             missing: Style::new().dimmed(),
@@ -210,31 +208,61 @@ impl Theme {
     }
 }
 
-/// The `table` format with a [`Theme`]: the six columns, padded to the widest value of
-/// each. A missing value is `-`, except in the `error` column, which is empty unless
-/// the input was invalid; the `asn` column is right-aligned, the last column is not
-/// padded. Padding is never inside a styled span.
+/// CAIDA's origin field as people read it: `15169` stays; a multi-origin prefix
+/// `149511_138421` becomes `149511, 138421`; an AS set `8035,13979` becomes
+/// `{8035, 13979}`, BGP's own notation for a set. Also says whether there was more
+/// than one origin.
+pub fn display_origins(raw: &str) -> (String, bool) {
+    let parts: Vec<String> = raw
+        .split('_')
+        .map(|part| {
+            if part.contains(',') {
+                format!("{{{}}}", part.replace(',', ", "))
+            } else {
+                part.to_owned()
+            }
+        })
+        .collect();
+    let multiple = parts.len() > 1 || raw.contains(',');
+    (parts.join(", "), multiple)
+}
+
+/// The `table` format with a [`Theme`]: `ip`, `prefix`, `asn`, `snapshot` and `error`,
+/// padded to the widest value of each. The `asn` column folds `origins` in: it shows
+/// every origin (see [`display_origins`]) rather than only the first, so the table has
+/// five columns where the other formats have six. A missing value is `-`, except in the
+/// `error` column, which is empty unless the input was invalid; `asn` is right-aligned,
+/// the last column is not padded. Padding is never inside a styled span.
 pub fn write_table(report: &Report, writer: &mut dyn Write, theme: &Theme) -> anyhow::Result<()> {
-    const HEADER: [&str; 6] = ["ip", "prefix", "asn", "origins", "snapshot", "error"];
+    const HEADER: [&str; 5] = ["ip", "prefix", "asn", "snapshot", "error"];
     const ASN: usize = 2;
     let present = |value: Option<&str>, style: Style| match value {
         Some(value) => (value.to_owned(), style),
         None => ("-".to_owned(), theme.missing),
     };
-    let rows: Vec<[(String, Style); 6]> = report
+    let rows: Vec<[(String, Style); 5]> = report
         .results
         .iter()
         .map(|record| {
             let invalid = record.error.is_some();
-            let origins_style = match &record.origins {
-                Some(origins) if origins.contains(['_', ',']) => theme.multiple_origins,
-                _ => theme.origins,
+            let asn = match &record.origins {
+                Some(origins) => {
+                    let (text, multiple) = display_origins(origins);
+                    (
+                        text,
+                        if multiple {
+                            theme.multiple_origins
+                        } else {
+                            theme.asn
+                        },
+                    )
+                }
+                None => ("-".to_owned(), theme.missing),
             };
             [
                 (record.ip.clone(), if invalid { theme.error } else { theme.ip }),
                 present(record.prefix.as_deref(), theme.prefix),
-                present(record.asn.map(|asn| asn.to_string()).as_deref(), theme.asn),
-                present(record.origins.as_deref(), origins_style),
+                asn,
                 present(record.snapshot.as_deref(), theme.snapshot),
                 (record.error.clone().unwrap_or_default(), theme.error),
             ]
@@ -423,10 +451,10 @@ mod tests {
         assert_eq!(
             text,
             "\
-ip        prefix        asn  origins  snapshot    error
-8.8.8.8   8.8.8.0/24  15169  15169    2026-10-21
-10.0.0.1  -               -  -        2026-10-21
-bogus     -               -  -        -           invalid IP address syntax
+ip        prefix        asn  snapshot    error
+8.8.8.8   8.8.8.0/24  15169  2026-10-21
+10.0.0.1  -               -  2026-10-21
+bogus     -               -  -           invalid IP address syntax
 "
         );
         assert!(!Format::Table.is_binary());
@@ -438,6 +466,24 @@ bogus     -               -  -        -           invalid IP address syntax
         assert!(colored.contains("\x1b[1m\x1b[32m15169\x1b[0m"), "{colored:?}");
         assert!(colored.contains("\x1b[31mbogus\x1b[0m"), "{colored:?}");
         assert_eq!(anstream::adapter::strip_str(&colored).to_string(), text);
+    }
+
+    #[test]
+    fn table_lists_every_origin() {
+        assert_eq!(display_origins("15169"), ("15169".into(), false));
+        assert_eq!(display_origins("149511_138421"), ("149511, 138421".into(), true));
+        assert_eq!(display_origins("8035,13979"), ("{8035, 13979}".into(), true));
+        assert_eq!(
+            display_origins("1_2,3"),
+            ("1, {2, 3}".into(), true),
+            "an AS set inside a MOAS keeps its braces"
+        );
+        let mut report = report();
+        report.results[0].origins = Some("149511_138421".into());
+        let mut out = Vec::new();
+        write_table(&report, &mut out, &Theme::colored()).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("\x1b[33m149511, 138421\x1b[0m"), "{text:?}");
     }
 
     #[test]

@@ -135,11 +135,11 @@ fn table_format_and_the_piped_default() {
         .success()
         .stdout(
             "\
-ip        prefix        asn  origins      snapshot  error
-8.8.8.8   8.8.8.0/24  15169  15169        -
-64.9.9.9  64.0.0.0/8  64496  64496,64497  -
-10.0.0.1  -               -  -            -
-bogus     -               -  -            -         invalid IP address syntax
+ip        prefix                 asn  snapshot  error
+8.8.8.8   8.8.8.0/24           15169  -
+64.9.9.9  64.0.0.0/8  {64496, 64497}  -
+10.0.0.1  -                        -  -
+bogus     -                        -  -         invalid IP address syntax
 ",
         );
     let output = with_fixtures().args(["8.8.8.8", "-q"]).output().unwrap();
