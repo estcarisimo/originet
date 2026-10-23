@@ -293,9 +293,15 @@ fn fetch_reports_cached_snapshots_and_takes_no_addresses() {
         .unwrap();
         fs::copy(fixture("sample-v4.pfx2as.gz"), dataset.join("2026/10").join(name)).unwrap();
     }
-    let v4 = dir
-        .path()
-        .join("routeviews-prefix2as/2026/10/routeviews-rv2-20261020-1000.pfx2as.gz");
+    // Joined component by component: the binary prints the platform's separators.
+    let v4 = [
+        "routeviews-prefix2as",
+        "2026",
+        "10",
+        "routeviews-rv2-20261020-1000.pfx2as.gz",
+    ]
+    .iter()
+    .fold(dir.path().to_path_buf(), |path, part| path.join(part));
     let output = cmd()
         .arg("--cache-dir")
         .arg(dir.path())
