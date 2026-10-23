@@ -1,7 +1,9 @@
 //! Result records and the output formats.
 
+use std::fmt::Write as _;
 use std::io::Write;
 
+use anstyle::{AnsiColor, Style};
 use serde::Serialize;
 
 use crate::caida::Family;
@@ -109,6 +111,8 @@ pub struct Tool {
 /// The output formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Format {
+    /// Aligned columns for reading in a terminal, results only; `asn` lists every origin.
+    Table,
     /// One JSON document with metadata, summary and results.
     Json,
     /// One JSON object per line, results only.
@@ -139,6 +143,7 @@ impl Format {
 /// Writes the report in the chosen format.
 pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow::Result<()> {
     match format {
+        Format::Table => write_table(report, writer, &Theme::plain())?,
         Format::Json => {
             serde_json::to_writer_pretty(&mut *writer, report)?;
             writer.write_all(b"\n")?;
@@ -155,6 +160,140 @@ pub fn write(format: Format, report: &Report, writer: &mut dyn Write) -> anyhow:
         Format::Parquet => parquet_output::write(report, writer)?,
     }
     writer.flush()?;
+    Ok(())
+}
+
+/// How the `table` format is styled. [`Theme::plain`] renders no escape codes at all;
+/// [`Theme::colored`] is what the binary uses on a terminal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Theme {
+    /// The header line.
+    pub header: Style,
+    /// The `ip` of a valid input.
+    pub ip: Style,
+    /// The matched `prefix`.
+    pub prefix: Style,
+    /// The `asn` column when one AS originates the prefix.
+    pub asn: Style,
+    /// The `asn` column when several ASes originate the prefix (a MOAS) or the origin
+    /// is an AS set.
+    pub multiple_origins: Style,
+    /// The `snapshot` date.
+    pub snapshot: Style,
+    /// The `-` of a missing value.
+    pub missing: Style,
+    /// An invalid input: its `ip` as typed and the `error`.
+    pub error: Style,
+}
+
+impl Theme {
+    /// No styling.
+    pub fn plain() -> Self {
+        Self::default()
+    }
+
+    /// Bold header, cyan prefix, bold green ASN, yellow multi-origin lists, dim
+    /// snapshot dates and dashes, red invalid inputs.
+    pub fn colored() -> Self {
+        Self {
+            header: Style::new().bold(),
+            ip: Style::new(),
+            prefix: AnsiColor::Cyan.on_default(),
+            asn: AnsiColor::Green.on_default().bold(),
+            multiple_origins: AnsiColor::Yellow.on_default(),
+            snapshot: Style::new().dimmed(),
+            missing: Style::new().dimmed(),
+            error: AnsiColor::Red.on_default(),
+        }
+    }
+}
+
+/// CAIDA's origin field as people read it: `15169` stays; a multi-origin prefix
+/// `149511_138421` becomes `149511, 138421`; an AS set `8035,13979` becomes
+/// `{8035, 13979}`, BGP's own notation for a set. Also says whether there was more
+/// than one origin.
+pub fn display_origins(raw: &str) -> (String, bool) {
+    let parts: Vec<String> = raw
+        .split('_')
+        .map(|part| {
+            if part.contains(',') {
+                format!("{{{}}}", part.replace(',', ", "))
+            } else {
+                part.to_owned()
+            }
+        })
+        .collect();
+    let multiple = parts.len() > 1 || raw.contains(',');
+    (parts.join(", "), multiple)
+}
+
+/// The `table` format with a [`Theme`]: `ip`, `prefix`, `asn`, `snapshot` and `error`,
+/// padded to the widest value of each. The `asn` column folds `origins` in: it shows
+/// every origin (see [`display_origins`]) rather than only the first, so the table has
+/// five columns where the other formats have six. A missing value is `-`, except in the
+/// `error` column, which is empty unless the input was invalid; `asn` is right-aligned,
+/// the last column is not padded. Padding is never inside a styled span.
+pub fn write_table(report: &Report, writer: &mut dyn Write, theme: &Theme) -> anyhow::Result<()> {
+    const HEADER: [&str; 5] = ["ip", "prefix", "asn", "snapshot", "error"];
+    const ASN: usize = 2;
+    let present = |value: Option<&str>, style: Style| match value {
+        Some(value) => (value.to_owned(), style),
+        None => ("-".to_owned(), theme.missing),
+    };
+    let rows: Vec<[(String, Style); 5]> = report
+        .results
+        .iter()
+        .map(|record| {
+            let invalid = record.error.is_some();
+            let asn = match &record.origins {
+                Some(origins) => {
+                    let (text, multiple) = display_origins(origins);
+                    (
+                        text,
+                        if multiple {
+                            theme.multiple_origins
+                        } else {
+                            theme.asn
+                        },
+                    )
+                }
+                None => ("-".to_owned(), theme.missing),
+            };
+            [
+                (record.ip.clone(), if invalid { theme.error } else { theme.ip }),
+                present(record.prefix.as_deref(), theme.prefix),
+                asn,
+                present(record.snapshot.as_deref(), theme.snapshot),
+                (record.error.clone().unwrap_or_default(), theme.error),
+            ]
+        })
+        .collect();
+    let mut widths = HEADER.map(str::len);
+    for row in &rows {
+        for (width, (cell, _)) in widths.iter_mut().zip(row) {
+            *width = (*width).max(cell.chars().count());
+        }
+    }
+    let header = HEADER.map(|name| (name.to_owned(), theme.header));
+    for row in std::iter::once(&header).chain(&rows) {
+        let mut line = String::new();
+        for (index, ((cell, style), width)) in row.iter().zip(widths).enumerate() {
+            if index > 0 {
+                line.push_str("  ");
+            }
+            let padding = width - cell.chars().count();
+            if index == ASN {
+                line.extend(std::iter::repeat_n(' ', padding));
+            }
+            if !cell.is_empty() {
+                write!(line, "{style}{cell}{style:#}")?;
+            }
+            if index != ASN && index + 1 < row.len() {
+                line.extend(std::iter::repeat_n(' ', padding));
+            }
+        }
+        writeln!(writer, "{}", line.trim_end())?;
+    }
     Ok(())
 }
 
@@ -302,6 +441,49 @@ mod tests {
                 .unwrap()
                 .starts_with("ip\tprefix\tasn\torigins\tsnapshot\terror\n")
         );
+    }
+
+    #[test]
+    fn table_is_aligned_with_dashes_for_nulls() {
+        let mut out = Vec::new();
+        write(Format::Table, &report(), &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(
+            text,
+            "\
+ip        prefix        asn  snapshot    error
+8.8.8.8   8.8.8.0/24  15169  2026-10-21
+10.0.0.1  -               -  2026-10-21
+bogus     -               -  -           invalid IP address syntax
+"
+        );
+        assert!(!Format::Table.is_binary());
+
+        let mut colored = Vec::new();
+        write_table(&report(), &mut colored, &Theme::colored()).unwrap();
+        let colored = String::from_utf8(colored).unwrap();
+        assert!(colored.starts_with("\x1b[1mip\x1b[0m"), "{colored:?}");
+        assert!(colored.contains("\x1b[1m\x1b[32m15169\x1b[0m"), "{colored:?}");
+        assert!(colored.contains("\x1b[31mbogus\x1b[0m"), "{colored:?}");
+        assert_eq!(anstream::adapter::strip_str(&colored).to_string(), text);
+    }
+
+    #[test]
+    fn table_lists_every_origin() {
+        assert_eq!(display_origins("15169"), ("15169".into(), false));
+        assert_eq!(display_origins("149511_138421"), ("149511, 138421".into(), true));
+        assert_eq!(display_origins("8035,13979"), ("{8035, 13979}".into(), true));
+        assert_eq!(
+            display_origins("1_2,3"),
+            ("1, {2, 3}".into(), true),
+            "an AS set inside a MOAS keeps its braces"
+        );
+        let mut report = report();
+        report.results[0].origins = Some("149511_138421".into());
+        let mut out = Vec::new();
+        write_table(&report, &mut out, &Theme::colored()).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("\x1b[33m149511, 138421\x1b[0m"), "{text:?}");
     }
 
     #[test]

@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Added
+- `--format table`: aligned columns for reading in a terminal, with `-` for missing
+  values and one `asn` column that lists every origin (`149511, 138421` for a
+  multi-origin prefix, `{8035, 13979}` for an AS set). It is the default when standard
+  output is a terminal; `json` stays the default for pipes and `--output`.
+- `--color auto|always|never`: on a terminal the table, the summary counts and the
+  progress bar are colored (`NO_COLOR` honored); `never` gives plain text, `always`
+  keeps the escapes in a pipe or a file. Library: `output::Theme` and `write_table`.
+- A progress bar on standard error while a snapshot downloads (size, speed, time left)
+  and a spinner while it loads, when standard error is a terminal; `--quiet` turns them
+  off.
+- `--fetch`: download the day's IPv4 and IPv6 snapshots into the cache and exit, printing
+  each one's date, `downloaded`/`cached` and path; with `--offline` it checks the cache.
+- Library: `fetch::Progress` and `Fetcher::progress` to observe downloads and loads;
+  `load::fetch_snapshot` resolves and caches a snapshot without loading it.
+
+### Changed
+- At a terminal the default output is the table instead of the JSON report; pipes and
+  files are unchanged.
+
 ## [1.0.0] - 2026-10-22
 
 A rewrite in Rust, renamed from `map-ip-to-asn` to **originet**. The tool no longer

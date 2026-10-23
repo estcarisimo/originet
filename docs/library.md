@@ -24,6 +24,13 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
+`Fetcher::offline`, `refresh_index` and `progress` are builder methods; the last takes
+an implementation of `fetch::Progress`, which is told when a snapshot starts
+downloading (with its size, when known), how many bytes arrived, and when it starts and
+finishes loading. The binary's progress bars are one such implementation; a library
+user may log, or pass nothing and hear nothing. `load::fetch_snapshot` resolves the
+snapshot for a date and puts it in the cache without loading it (what `--fetch` does).
+
 Modules:
 
 | Module | What it does |

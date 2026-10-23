@@ -74,7 +74,12 @@ CAIDA's layout: `routeviews-prefix2as/pfx2as-creation.log`,
 listing per month visited (`routeviews-prefix2as/2015/01/.listing`), and the same
 under `routeviews6-prefix2as/`. A snapshot is about 4 MB (IPv4) and 1 MB (IPv6)
 compressed. Downloads go to a temporary file and are renamed into place, so an
-interrupted run never leaves a truncated snapshot behind. Delete the directory to start over.
+interrupted run never leaves a truncated snapshot behind.
+
+Nothing prunes the cache: every day you ask for stays, about 5 MB per day for both
+families, and the same day is never downloaded twice. Delete a month directory
+(`routeviews-prefix2as/2019/06/`) to drop its snapshots, or the whole directory to start
+over; `--fetch --offline --date DAY` tells whether a day is cached without downloading.
 
 ## Terms of use
 
