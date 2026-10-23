@@ -131,20 +131,20 @@ fn scan_family(cache_dir: &Path, family: Family) -> Result<FamilyInventory, Cach
             inventory.bytes += year_meta.len();
             continue;
         }
-        if numeric_name(&year_entry, 4).is_none() {
+        let Some(year) = numeric_name(&year_entry, 4) else {
             log::debug!("{}: not a year directory, skipped", year_entry.path().display());
             continue;
-        }
+        };
         for month_entry in entries(&year_entry.path())? {
             let month_meta = metadata(&month_entry)?;
             if !month_meta.is_dir() {
                 inventory.bytes += month_meta.len();
                 continue;
             }
-            if numeric_name(&month_entry, 2).is_none() {
+            let Some(month) = numeric_name(&month_entry, 2) else {
                 log::debug!("{}: not a month directory, skipped", month_entry.path().display());
                 continue;
-            }
+            };
             for entry in entries(&month_entry.path())? {
                 let meta = metadata(&entry)?;
                 if meta.is_dir() {
@@ -156,15 +156,22 @@ fn scan_family(cache_dir: &Path, family: Family) -> Result<FamilyInventory, Cach
                 let Some(name) = name.to_str() else {
                     continue;
                 };
-                if name.ends_with(".pfx2as.gz")
-                    && let Some(date) = caida::date_from_file_name(name)
-                {
-                    inventory.snapshots.push(CachedSnapshot {
-                        family,
-                        date,
-                        path: entry.path(),
-                        bytes: meta.len(),
-                    });
+                // Only a file named exactly as CAIDA names this family's snapshots, in the
+                // directory of its own month, is a snapshot of ours; anything else only
+                // counts toward the size and is never removed.
+                match caida::snapshot_file_name_date(family, name) {
+                    Some(date)
+                        if u32::from(date.year().unsigned_abs()) == year
+                            && u32::from(date.month().unsigned_abs()) == month =>
+                    {
+                        inventory.snapshots.push(CachedSnapshot {
+                            family,
+                            date,
+                            path: entry.path(),
+                            bytes: meta.len(),
+                        });
+                    }
+                    _ => log::debug!("{}: not a {family} snapshot, left alone", entry.path().display()),
                 }
             }
         }
@@ -465,6 +472,47 @@ mod tests {
         assert_eq!(v6.bytes, 50 + "partial".len() as u64 + 54);
         assert_eq!(inventory.snapshots().count(), 5);
         assert_eq!(inventory.bytes(), v4.bytes + v6.bytes);
+    }
+
+    #[test]
+    fn look_alike_files_are_not_snapshots_and_survive_a_prune() {
+        let dir = tempfile::tempdir().unwrap();
+        let month = dir.path().join(Family::V4.dataset()).join("2015/01");
+        fs::create_dir_all(&month).unwrap();
+        let ours = month.join("routeviews-rv2-20150101-1200.pfx2as.gz");
+        fs::write(&ours, "ours").unwrap();
+        let strays = [
+            "my-20180101-notes.pfx2as.gz",            // a date, but not CAIDA's naming
+            "routeviews-rv6-20150101-1200.pfx2as.gz", // the other family
+            "routeviews-rv2-20160101-1200.pfx2as.gz", // a date outside this month
+            "routeviews-rv2-20150101-1200.pfx2as.gz.bak",
+        ];
+        for stray in strays {
+            fs::write(month.join(stray), "not ours").unwrap();
+        }
+        let inventory = Inventory::scan(dir.path()).unwrap();
+        assert_eq!(
+            dates(&inventory.snapshots().collect::<Vec<_>>()),
+            [date(2015, 1, 1)]
+        );
+        assert_eq!(inventory.bytes(), 4 + 8 * strays.len() as u64);
+
+        let pruned = prune(
+            &inventory,
+            Retention {
+                keep_days: None,
+                keep_last: Some(0),
+            },
+            date(2026, 10, 23),
+            false,
+        )
+        .unwrap();
+        assert_eq!(pruned.snapshots.len(), 1);
+        assert!(!ours.exists());
+        for stray in strays {
+            assert!(month.join(stray).exists(), "{stray} must survive");
+        }
+        assert!(month.is_dir(), "a month with other files stays");
     }
 
     #[test]

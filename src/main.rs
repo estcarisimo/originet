@@ -472,7 +472,7 @@ fn prune_cache(
     }
     if !args.quiet {
         let kept = inventory.snapshots().count() - pruned.snapshots.len();
-        let kept_bytes = inventory.bytes() - pruned.bytes();
+        let kept_bytes = inventory.snapshots().map(|snapshot| snapshot.bytes).sum::<u64>() - pruned.bytes();
         eprintln!(
             "{} {} ({}), {} kept ({}) in {} ({}; {:.1?})",
             plural(pruned.snapshots.len(), "snapshot"),

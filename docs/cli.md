@@ -176,7 +176,9 @@ exits; it takes no addresses and never touches the network.
   a snapshot stays only when both rules keep it. `--dry-run` prints what would go and
   removes nothing. A month directory left with nothing but its listing is removed with
   the listing, then the emptied year directory; the index files and anything originet
-  did not put there (a file of yours, a download in progress) are never touched.
+  did not put there (a file of yours, a download in progress) are never touched. A snapshot is recognized only by CAIDA's exact file name for its family
+(`routeviews-rv2-YYYYMMDD-HHMM.pfx2as.gz`, `routeviews-rv6-…`) in the directory of its
+own month. A symbolic link standing in for a whole dataset directory is followed.
 
 ```text
 $ originet --cache list --cache-dir ./cache
