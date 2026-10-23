@@ -1,11 +1,11 @@
 //! Filling a [`Table`] from a local file or from CAIDA, with the provenance of each load.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use jiff::civil::Date;
 
 use crate::caida::{self, DATASET_START_YEAR, Family, SelectError, Snapshot, previous_month};
-use crate::fetch::{FetchError, Fetcher};
+use crate::fetch::{FetchError, Fetcher, Step};
 use crate::output::{SnapshotInfo, Source};
 use crate::pfx2as::ReadError;
 use crate::table::Table;
@@ -125,13 +125,21 @@ fn previous_month_inverse((year, month): (i16, i8)) -> (i16, i8) {
     }
 }
 
-/// Resolves the snapshot for `date` (see [`select_snapshot`]), fetches it and loads it.
-pub fn load_caida(
-    table: &mut Table,
-    fetcher: &Fetcher,
-    family: Family,
-    date: Option<Date>,
-) -> Result<SnapshotInfo, LoadError> {
+/// A snapshot that is now in the cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fetched {
+    /// The snapshot that answers for the requested date.
+    pub snapshot: Snapshot,
+    /// Its file in the cache.
+    pub path: PathBuf,
+    /// Whether it was already there (nothing was downloaded).
+    pub cached: bool,
+}
+
+/// Resolves the snapshot for `date` (see [`select_snapshot`]) and makes sure it is in the
+/// cache, downloading it on first use. A warning names the snapshot when the day itself
+/// has none.
+pub fn fetch_snapshot(fetcher: &Fetcher, family: Family, date: Option<Date>) -> Result<Fetched, LoadError> {
     let snapshot = select_snapshot(fetcher, family, date)?;
     if let Some(requested) = date
         && snapshot.date != requested
@@ -141,8 +149,34 @@ pub fn load_caida(
             snapshot.date
         );
     }
+    let cached = fetcher.snapshot_path(&snapshot).is_file();
     let path = fetcher.snapshot(&snapshot)?;
-    let prefixes = load_file(table, family, &path)?;
+    Ok(Fetched {
+        snapshot,
+        path,
+        cached,
+    })
+}
+
+/// Resolves the snapshot for `date` (see [`select_snapshot`]), fetches it and loads it.
+pub fn load_caida(
+    table: &mut Table,
+    fetcher: &Fetcher,
+    family: Family,
+    date: Option<Date>,
+) -> Result<SnapshotInfo, LoadError> {
+    let Fetched { snapshot, path, .. } = fetch_snapshot(fetcher, family, date)?;
+    let reporter = fetcher.reporter();
+    if let Some(reporter) = reporter {
+        reporter.start(Step::Load {
+            file: snapshot.file_name(),
+        });
+    }
+    let loaded = load_file(table, family, &path);
+    if let Some(reporter) = reporter {
+        reporter.finish();
+    }
+    let prefixes = loaded?;
     Ok(SnapshotInfo {
         family,
         source: Source::Caida,

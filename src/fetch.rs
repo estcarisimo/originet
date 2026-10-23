@@ -4,8 +4,9 @@
 //! grows daily, so a cached copy is reused for a few hours and then refreshed. In
 //! offline mode nothing is downloaded and a missing file is an error.
 
+use std::fmt;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -59,13 +60,53 @@ pub enum FetchError {
     },
 }
 
+/// A slow step a [`Progress`] reporter is told about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step<'a> {
+    /// A snapshot is being downloaded; `total` is the size the server announced, if any.
+    Download {
+        /// The snapshot's file name.
+        file: &'a str,
+        /// `Content-Length`, when the server sent one.
+        total: Option<u64>,
+    },
+    /// A snapshot is being parsed into a table.
+    Load {
+        /// The snapshot's file name.
+        file: &'a str,
+    },
+}
+
+/// Receives the progress of the slow steps (downloading a snapshot, loading it), for a
+/// progress bar. Steps never overlap: `start`, then `advance` zero or more times, then
+/// `finish`, which is also called when the step fails.
+pub trait Progress: Send + Sync {
+    /// A step begins.
+    fn start(&self, step: Step<'_>);
+    /// `bytes` more bytes of the current download arrived.
+    fn advance(&self, bytes: u64);
+    /// The current step ended, successfully or not.
+    fn finish(&self);
+}
+
 /// Downloads with a local cache.
-#[derive(Debug)]
 pub struct Fetcher {
     cache_dir: PathBuf,
     offline: bool,
     refresh_index: bool,
     agent: ureq::Agent,
+    progress: Option<Box<dyn Progress>>,
+}
+
+impl fmt::Debug for Fetcher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fetcher")
+            .field("cache_dir", &self.cache_dir)
+            .field("offline", &self.offline)
+            .field("refresh_index", &self.refresh_index)
+            .field("progress", &self.progress.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Fetcher {
@@ -81,6 +122,7 @@ impl Fetcher {
             offline: false,
             refresh_index: false,
             agent: ureq::Agent::new_with_config(config),
+            progress: None,
         }
     }
 
@@ -96,6 +138,18 @@ impl Fetcher {
     pub fn refresh_index(mut self, refresh: bool) -> Self {
         self.refresh_index = refresh;
         self
+    }
+
+    /// Report downloads and loads to `progress` (a progress bar, say). Default: none.
+    #[must_use]
+    pub fn progress(mut self, progress: impl Progress + 'static) -> Self {
+        self.progress = Some(Box::new(progress));
+        self
+    }
+
+    /// The progress reporter, if one was set.
+    pub fn reporter(&self) -> Option<&dyn Progress> {
+        self.progress.as_deref()
     }
 
     /// The cache directory.
@@ -152,7 +206,7 @@ impl Fetcher {
         } else if cached_is_fresh {
             log::info!("using the cached {family} index at {}", path.display());
         } else {
-            match self.download(&url, &path) {
+            match self.download(&url, &path, None) {
                 Ok(bytes) => {
                     log::info!("downloaded the {family} index ({bytes} bytes) from {url}");
                     location = url;
@@ -260,7 +314,7 @@ impl Fetcher {
             });
         }
         let url = snapshot.url();
-        let bytes = self.download(&url, &path)?;
+        let bytes = self.download(&url, &path, Some(snapshot.file_name()))?;
         log::info!("downloaded {url} ({bytes} bytes) to {}", path.display());
         Ok(path)
     }
@@ -300,8 +354,10 @@ impl Fetcher {
     }
 
     /// Downloads `url` to `path` through a temporary file, so an interrupted download
-    /// never leaves a truncated file in the cache. Returns the byte count.
-    fn download(&self, url: &str, path: &Path) -> Result<u64, FetchError> {
+    /// never leaves a truncated file in the cache. Returns the byte count. With
+    /// `progress_as`, the download is reported to the progress reporter under that
+    /// file name.
+    fn download(&self, url: &str, path: &Path, progress_as: Option<&str>) -> Result<u64, FetchError> {
         let io_error = |source| FetchError::Io {
             path: path.to_path_buf(),
             source,
@@ -312,22 +368,54 @@ impl Fetcher {
             url: url.to_owned(),
             source: Box::new(source),
         })?;
-        let mut body = response.body_mut().as_reader();
-        let mut temporary = tempfile::Builder::new()
-            .prefix(".download-")
-            .tempfile_in(parent)
-            .map_err(io_error)?;
-        let bytes = io::copy(&mut body, temporary.as_file_mut()).map_err(|source| {
-            match source.downcast::<ureq::Error>() {
-                Ok(error) => FetchError::Http {
-                    url: url.to_owned(),
-                    source: Box::new(error),
-                },
-                Err(source) => io_error(source),
-            }
-        })?;
-        temporary.persist(path).map_err(|error| io_error(error.error))?;
-        Ok(bytes)
+        let total = response.body().content_length();
+        let reporter = progress_as.and_then(|file| {
+            let reporter = self.reporter()?;
+            reporter.start(Step::Download { file, total });
+            Some(reporter)
+        });
+        let result = (|| {
+            let body = response.body_mut().as_reader();
+            let mut body = Counted {
+                inner: body,
+                reporter,
+            };
+            let mut temporary = tempfile::Builder::new()
+                .prefix(".download-")
+                .tempfile_in(parent)
+                .map_err(io_error)?;
+            let bytes = io::copy(&mut body, temporary.as_file_mut()).map_err(|source| {
+                match source.downcast::<ureq::Error>() {
+                    Ok(error) => FetchError::Http {
+                        url: url.to_owned(),
+                        source: Box::new(error),
+                    },
+                    Err(source) => io_error(source),
+                }
+            })?;
+            temporary.persist(path).map_err(|error| io_error(error.error))?;
+            Ok(bytes)
+        })();
+        if let Some(reporter) = reporter {
+            reporter.finish();
+        }
+        result
+    }
+}
+
+/// A reader that tells the progress reporter how many bytes went through.
+struct Counted<'a, R> {
+    inner: R,
+    reporter: Option<&'a dyn Progress>,
+}
+
+impl<R: Read> Read for Counted<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if let Some(reporter) = self.reporter {
+            reporter.advance(read as u64);
+        }
+        Ok(read)
     }
 }
 
