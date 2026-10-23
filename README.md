@@ -13,6 +13,8 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
+[llms.txt](https://estcarisimo.github.io/originet/llms.txt) is the documentation index for AI agents.
+
 ## ✨ Features
 
 - 🔍 **Longest-prefix match**: every answer carries the most specific prefix that covers the address, its origin ASN and, for multi-origin prefixes and AS sets, all origins in CAIDA's notation
@@ -206,6 +208,7 @@ MIT, see [LICENSE](https://github.com/estcarisimo/originet/blob/main/LICENSE). T
 ## 🔗 Related Resources
 
 - [Documentation site](https://estcarisimo.github.io/originet/)
+- [llms.txt](https://estcarisimo.github.io/originet/llms.txt) for AI agents ([full text](https://estcarisimo.github.io/originet/llms-full.txt))
 - [CAIDA Routeviews Prefix to AS mappings Dataset (pfx2as)](https://www.caida.org/catalog/datasets/routeviews-prefix2as/)
 - [RouteViews](https://www.routeviews.org/)
 - [CAIDA libipmeta](https://github.com/CAIDA/libipmeta), the C library the 0.x Python version wrapped

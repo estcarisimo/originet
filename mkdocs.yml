@@ -57,3 +57,25 @@ markdown_extensions:
 
 plugins:
   - search
+  # Writes site/llms.txt (an index of the pages below) and site/llms-full.txt
+  # (the same pages expanded). site_url above is required; the index links are
+  # absolute, so they stay valid on GitHub Pages.
+  - llmstxt:
+      markdown_description: >
+        originet maps IP addresses to the Autonomous System that originates
+        them, using CAIDA's daily RouteViews prefix-to-AS snapshots. One Rust
+        binary and a Python package, with no C library to install.
+      full_output: llms-full.txt
+      sections:
+        Documentation:
+          - index.md: Overview, install, and examples
+          - cli.md: Command-line reference
+          - python.md: Python bindings
+          - data.md: CAIDA snapshots, dates, and the cache
+          - output.md: Output columns and formats
+          - docker.md: Container image
+          - library.md: Rust library
+          - changelog.md: Release history
+          - contributing.md: Development and releases
+          - security.md: Reporting vulnerabilities
+          - citing.md: How to cite the tool and the dataset

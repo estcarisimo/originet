@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Added
+- The documentation site serves `/llms.txt` and `/llms-full.txt` for AI agents.
+  The README links to them.
+
 ## [1.0.0] - 2026-10-23
 
 A rewrite in Rust, renamed from `map-ip-to-asn` to **originet**. The tool no longer
