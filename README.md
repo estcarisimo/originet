@@ -18,8 +18,8 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 - 🔍 **Longest-prefix match**: every answer carries the most specific prefix that covers the address, its origin ASN and, for multi-origin prefixes and AS sets, all origins in CAIDA's notation
 - 📅 **Any day since 2005**: `--date` resolves the newest snapshot on or before that day through CAIDA's index and monthly listings; the default is the newest snapshot
 - 🌍 **IPv4 and IPv6 in one run**: each family's snapshot is loaded only when the input needs it
-- 📦 **Batch by default**: addresses from arguments, a file or standard input; JSON, JSON Lines, CSV, TSV or Parquet out
-- 💾 **Cached and offline-capable**: snapshots are downloaded once (atomically) into a cache; `--offline` never touches the network; `--pfx2as` uses your own file
+- 📦 **Batch by default**: addresses from arguments, a file or standard input; a colored table on the terminal (`--color never` for plain), JSON, JSON Lines, CSV, TSV or Parquet out
+- 💾 **Cached and offline-capable**: snapshots are downloaded once (atomically, with a progress bar) into a cache; `--fetch` warms it, `--offline` never touches the network; `--pfx2as` uses your own file
 - 🐍 **Python bindings**: `Table.from_caida()` / `Table.from_files()` and `lookup_many()` with the GIL released
 - 🦀 **Single binary, no C stack**: no libipmeta, no pyipmeta, no scraping; `unsafe_code = "forbid"`
 - 🐳 **Docker image**: multi-stage build, non-root, cache volume
@@ -65,8 +65,9 @@ docker run --rm -v originet-cache:/cache originet 8.8.8.8
 ## 📖 Usage
 
 ```bash
-# One or more addresses, JSON report on stdout, summary on stderr
+# One or more addresses: a table on the terminal (the JSON report when piped), summary on stderr
 originet 8.8.8.8 1.1.1.1 2606:4700::1111
+originet --format json 8.8.8.8
 
 # A file (one address per line, # comments allowed) to CSV
 originet --file ips.txt --format csv --output results.csv
