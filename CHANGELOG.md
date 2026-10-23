@@ -13,6 +13,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - README and library docs: install from crates.io (`cargo install originet`), link docs.rs.
 
 ### Fixed
+- Release workflow: the PyPI publish and the release attach download only the wheel and
+  sdist artifacts; the image job's `.dockerbuild` record made twine fail the upload.
 - Release workflow: the linux-aarch64 wheel builds again (manylinux_2_28 cross image and
   `__ARM_ARCH` for ring), so the wheels get attached and published. That wheel now
   targets glibc 2.28 (manylinux_2_28); the x86_64 wheel stays on manylinux2014.
