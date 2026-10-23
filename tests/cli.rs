@@ -636,7 +636,7 @@ fn cache_prune_keep_last_with_a_dry_run_first() {
         stderr.starts_with(&format!(
             "2 snapshots removed ({}), 2 kept ({}) in",
             format_bytes(2 * snapshot),
-            format_bytes(v4_bytes + v6_bytes - 2 * snapshot)
+            format_bytes(2 * snapshot)
         )) && stderr.contains(&format!(
             "(ipv4 1 snapshot {v6}, ipv6 1 snapshot {v6};",
             v6 = format_bytes(v6_bytes)
