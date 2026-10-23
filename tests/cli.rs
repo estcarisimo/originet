@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use originet::cache::format_bytes;
 use predicates::prelude::*;
 
 fn fixture(name: &str) -> PathBuf {
@@ -439,4 +440,330 @@ fn help_and_version() {
         .assert()
         .success()
         .stdout(predicate::str::starts_with("originet "));
+}
+
+/// Seeds a cache as the fetcher lays it out: two IPv4 months (one of them with a
+/// listing), one IPv6 month, both indexes. Returns the paths of the snapshots, IPv4
+/// first, oldest first, as the binary prints them (joined component by component: the
+/// binary prints the platform's separators).
+fn seed_cache(root: &std::path::Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for (dataset, year, month, name) in [
+        (
+            "routeviews-prefix2as",
+            "2015",
+            "01",
+            "routeviews-rv2-20150101-1200.pfx2as.gz",
+        ),
+        (
+            "routeviews-prefix2as",
+            "2026",
+            "10",
+            "routeviews-rv2-20261020-1000.pfx2as.gz",
+        ),
+        (
+            "routeviews-prefix2as",
+            "2026",
+            "10",
+            "routeviews-rv2-20261021-0800.pfx2as.gz",
+        ),
+        (
+            "routeviews6-prefix2as",
+            "2026",
+            "10",
+            "routeviews-rv6-20261021-1200.pfx2as.gz",
+        ),
+    ] {
+        let dir = root.join(dataset).join(year).join(month);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        fs::copy(fixture("sample-v4.pfx2as.gz"), &path).unwrap();
+        paths.push(path);
+    }
+    // Written, not copied from a fixture: git may check a text fixture out with CRLF
+    // line endings on Windows, and the sizes below must be the same on every platform.
+    for dataset in ["routeviews-prefix2as", "routeviews6-prefix2as"] {
+        fs::write(root.join(dataset).join("pfx2as-creation.log"), SEED_INDEX).unwrap();
+    }
+    fs::write(root.join("routeviews-prefix2as/2015/01/.listing"), SEED_LISTING).unwrap();
+    paths
+}
+
+const SEED_INDEX: &str = "6777\t1792685687\t2026/10/routeviews-rv2-20261021-0800.pfx2as.gz\n";
+const SEED_LISTING: &str = "routeviews-rv2-20150101-1200.pfx2as.gz\n";
+
+/// The sizes `--cache` reports for the seeded cache: one snapshot, the IPv4 dataset
+/// (three snapshots, the listing, the index) and the IPv6 dataset (one snapshot, the index).
+fn seeded_bytes() -> (u64, u64, u64) {
+    let snapshot = fs::metadata(fixture("sample-v4.pfx2as.gz")).unwrap().len();
+    let index = u64::try_from(SEED_INDEX.len()).unwrap();
+    let listing = u64::try_from(SEED_LISTING.len()).unwrap();
+    (snapshot, 3 * snapshot + listing + index, snapshot + index)
+}
+
+#[test]
+fn cache_list_and_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = seed_cache(dir.path());
+    let (_, v4, v6) = seeded_bytes();
+    // The fixture is 200 bytes; the indexes are 272 each and the listing 39.
+    let output = cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "list"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout,
+        format!(
+            "ipv4  2015-01-01     200 B  {}\nipv4  2026-10-20     200 B  {}\nipv4  2026-10-21     200 B  {}\nipv6  2026-10-21     200 B  {}\n",
+            paths[0].display(),
+            paths[1].display(),
+            paths[2].display(),
+            paths[3].display()
+        )
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!("4 snapshots, {} in", format_bytes(v4 + v6)))
+            && stderr.contains(&format!(
+                "(ipv4 3 snapshots {}, ipv6 1 snapshot {};",
+                format_bytes(v4),
+                format_bytes(v6)
+            )),
+        "{stderr}"
+    );
+
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "size", "-q"])
+        .assert()
+        .success()
+        .stdout(format!(
+            "{:<5}  {:>14}  {:>8}\n{:<5}  {:>14}  {:>8}\n{:<5}  {:>14}  {:>8}  {}\n",
+            "ipv4",
+            "3 snapshots",
+            format_bytes(v4),
+            "ipv6",
+            "1 snapshot",
+            format_bytes(v6),
+            "total",
+            "4 snapshots",
+            format_bytes(v4 + v6),
+            dir.path().display()
+        ))
+        .stderr("");
+
+    // An empty (even missing) cache is not an error.
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path().join("missing"))
+        .args(["--cache", "list"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(predicate::str::starts_with("0 snapshots, 0 B in"));
+}
+
+#[test]
+fn cache_prune_keep_last_with_a_dry_run_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = seed_cache(dir.path());
+    let (snapshot, _v4_bytes, v6_bytes) = seeded_bytes();
+    let v4 = dir.path().join("routeviews-prefix2as");
+
+    // The dry run names what would go and touches nothing.
+    let output = cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-last", "1", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!(
+            "ipv4  2015-01-01     200 B  would remove  {}\nipv4  2026-10-20     200 B  would remove  {}\n",
+            paths[0].display(),
+            paths[1].display()
+        )
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.starts_with(&format!(
+            "2 snapshots would be removed ({}), 2 kept ({}) in",
+            format_bytes(2 * snapshot),
+            // "kept" is the kept snapshots' own size, not indexes or listings.
+            format_bytes(2 * snapshot)
+        )),
+        "{stderr}"
+    );
+    assert!(paths.iter().all(|path| path.is_file()));
+    assert!(v4.join("2015/01/.listing").is_file());
+
+    let output = cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-last", "1"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!(
+            "ipv4  2015-01-01     200 B  removed       {}\nipv4  2026-10-20     200 B  removed       {}\n",
+            paths[0].display(),
+            paths[1].display()
+        )
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.starts_with(&format!(
+            "2 snapshots removed ({}), 2 kept ({}) in",
+            format_bytes(2 * snapshot),
+            format_bytes(2 * snapshot)
+        )) && stderr.contains(&format!(
+            "(ipv4 1 snapshot {v6}, ipv6 1 snapshot {v6};",
+            v6 = format_bytes(v6_bytes)
+        )),
+        "{stderr}"
+    );
+    // The emptied month went with its listing, then the emptied year; the month that
+    // kept a snapshot, both indexes and the other family are untouched.
+    assert!(!v4.join("2015").exists());
+    assert!(!paths[1].exists());
+    assert!(paths[2].is_file() && paths[3].is_file());
+    assert!(v4.join("pfx2as-creation.log").is_file());
+    assert!(
+        dir.path()
+            .join("routeviews6-prefix2as/pfx2as-creation.log")
+            .is_file()
+    );
+
+    // Nothing left to prune: no lines, a summary.
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-last", "1"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(predicate::str::starts_with("0 snapshots removed (0 B), 2 kept"));
+}
+
+#[test]
+fn cache_prune_keep_days_counts_from_today() {
+    // One snapshot dated today (UTC) and one from 2015: `--keep-days 30` keeps today's.
+    let dir = tempfile::tempdir().unwrap();
+    let today = jiff::Timestamp::now().to_zoned(jiff::tz::TimeZone::UTC).date();
+    let month_dir = dir
+        .path()
+        .join("routeviews-prefix2as")
+        .join(format!("{:04}", today.year()))
+        .join(format!("{:02}", today.month()));
+    fs::create_dir_all(&month_dir).unwrap();
+    let recent = month_dir.join(format!(
+        "routeviews-rv2-{:04}{:02}{:02}-1200.pfx2as.gz",
+        today.year(),
+        today.month(),
+        today.day()
+    ));
+    fs::copy(fixture("sample-v4.pfx2as.gz"), &recent).unwrap();
+    let old_dir = dir.path().join("routeviews-prefix2as").join("2015").join("01");
+    fs::create_dir_all(&old_dir).unwrap();
+    let old = old_dir.join("routeviews-rv2-20150101-1200.pfx2as.gz");
+    fs::copy(fixture("sample-v4.pfx2as.gz"), &old).unwrap();
+
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-days", "30", "-q"])
+        .assert()
+        .success()
+        .stdout(format!(
+            "ipv4  2015-01-01     200 B  removed       {}\n",
+            old.display()
+        ))
+        .stderr("");
+    assert!(recent.is_file());
+    assert!(!old_dir.exists());
+
+    // Both rules bound the result: the newest one, but only if it is from today.
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-days", "0", "--keep-last", "1", "-q"])
+        .assert()
+        .success()
+        .stdout("");
+    assert!(recent.is_file());
+}
+
+#[test]
+fn cache_flags_are_usage_checked() {
+    cmd()
+        .args(["--cache", "prune"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "'--cache prune' requires '--keep-days <N>' and/or '--keep-last <N>'",
+        ));
+    for flag in [["--keep-days", "3"], ["--keep-last", "3"]] {
+        cmd()
+            .args(flag)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("--cache <ACTION>"));
+        cmd()
+            .args(["--cache", "list"])
+            .args(flag)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("can only be used with '--cache prune'"));
+    }
+    cmd()
+        .args(["--cache", "size", "--dry-run"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "'--dry-run' can only be used with '--cache prune'",
+        ));
+    cmd()
+        .args(["--cache", "list", "8.8.8.8"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"));
+    cmd().args(["--cache", "list", "--fetch"]).assert().code(2);
+    cmd().args(["--cache", "wipe"]).assert().code(2);
+}
+
+#[test]
+fn cache_prune_with_an_enormous_keep_days_keeps_everything() {
+    // u32::MAX days is beyond what a date can be shifted by; that must not panic.
+    let dir = tempfile::tempdir().unwrap();
+    let paths = seed_cache(dir.path());
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-days", "4294967295", "--dry-run"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(predicate::str::starts_with("0 snapshots would be removed"));
+    assert!(paths.iter().all(|path| path.is_file()));
 }

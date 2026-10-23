@@ -19,7 +19,7 @@ addresses in about two seconds. A Python package exposes the same table for bulk
 - 📅 **Any day since 2005**: `--date` resolves the newest snapshot on or before that day through CAIDA's index and monthly listings; the default is the newest snapshot
 - 🌍 **IPv4 and IPv6 in one run**: each family's snapshot is loaded only when the input needs it
 - 📦 **Batch by default**: addresses from arguments, a file or standard input; a colored table on the terminal (`--color never` for plain), JSON, JSON Lines, CSV, TSV or Parquet out
-- 💾 **Cached and offline-capable**: snapshots are downloaded once (atomically, with a progress bar) into a cache; `--fetch` warms it, `--offline` never touches the network; `--pfx2as` uses your own file
+- 💾 **Cached and offline-capable**: snapshots are downloaded once (atomically, with a progress bar) into a cache; `--fetch` warms it, `--cache` lists and prunes it, `--offline` never touches the network; `--pfx2as` uses your own file
 - 🐍 **Python bindings**: `Table.from_caida()` / `Table.from_files()` and `lookup_many()` with the GIL released
 - 🦀 **Single binary, no C stack**: no libipmeta, no pyipmeta, no scraping; `unsafe_code = "forbid"`
 - 🐳 **Docker image**: multi-stage build, non-root, cache volume
@@ -123,6 +123,7 @@ table.snapshots      # [{'family': 'ipv4', 'source': 'caida', 'date': '2024-01-0
 | `--cache-dir DIR` / `ORIGINET_CACHE_DIR` | Where indexes, listings and snapshots are kept. Default: the platform cache directory (`~/.cache/originet` on Linux, `~/Library/Caches/originet` on macOS, `/cache` in the image) |
 | `--offline` | Never download; error if the index, listing or snapshot is not cached |
 | `--refresh` | Fetch the snapshot index again even if the cached copy is less than six hours old |
+| `--cache list\|size\|prune` | Show what the cache holds and its size, or prune it: `--keep-days N`, `--keep-last N`, `--dry-run` |
 | `-v`, `-vv`, `RUST_LOG` | Log what is fetched or read from the cache |
 
 The index and the current month's listing are refreshed after six hours; snapshot files
@@ -137,6 +138,7 @@ src/
 ├── table.rs     # Longest-prefix-match table (one prefix-trie per family)
 ├── caida.rs     # Dataset layout, rolling index and monthly listings, date selection
 ├── fetch.rs     # Cached, atomic downloads; index freshness; offline mode
+├── cache.rs     # Inventory of the cache; pruning by age or count
 ├── load.rs      # Local file or CAIDA snapshot into a table, with provenance
 ├── input.rs     # Address parsing (/32, /128, IPv4-mapped IPv6, comments)
 └── output.rs    # Records, summary, report; JSON, JSON Lines, CSV, TSV, Parquet

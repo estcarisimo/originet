@@ -76,10 +76,14 @@ under `routeviews6-prefix2as/`. A snapshot is about 4 MB (IPv4) and 1 MB (IPv6)
 compressed. Downloads go to a temporary file and are renamed into place, so an
 interrupted run never leaves a truncated snapshot behind.
 
-Nothing prunes the cache: every day you ask for stays, about 5 MB per day for both
-families, and the same day is never downloaded twice. Delete a month directory
-(`routeviews-prefix2as/2019/06/`) to drop its snapshots, or the whole directory to start
-over; `--fetch --offline --date DAY` tells whether a day is cached without downloading.
+Nothing expires on its own: every day you ask for stays, about 5 MB per day for both
+families, and the same day is never downloaded twice. `--cache list` and `--cache size`
+show what is there; `--cache prune --keep-days N` or `--keep-last N` (with `--dry-run`
+to look first) drops the old snapshots and the month and year directories they leave
+empty, and never touches the indexes or anything else (see
+[The cache](cli.md#the-cache)). Deleting by hand works too: a month directory
+(`routeviews-prefix2as/2019/06/`) drops its snapshots, the whole cache directory starts
+over. `--fetch --offline --date DAY` tells whether a day is cached without downloading.
 
 ## Terms of use
 

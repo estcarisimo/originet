@@ -7,7 +7,7 @@ Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots.
 Addresses come from the command line, from a file (`--file`, one per line) or from standard input
 (`--file -`). The matching snapshot is downloaded from CAIDA on first use and cached; `--date` picks
 the newest snapshot on or before a day, and `--pfx2as`/`--pfx2as6` use local files instead of
-downloading. `--fetch` only fills the cache.
+downloading. `--fetch` only fills the cache; `--cache list|size|prune` inspects or prunes it.
 
 Usage: originet [OPTIONS] [IP]...
 
@@ -67,6 +67,30 @@ Options:
           whether it was already cached, and its path. With `--offline` it only checks that they are
           cached
 
+      --cache <ACTION>
+          Inspect or prune the cache and exit without looking anything up. `list` prints one line
+          per cached snapshot (family, date, size, path); `size` prints the snapshot count and size
+          per family and in total; `prune` removes the snapshots that `--keep-days` and
+          `--keep-last` do not keep (one of them is required) and then the month and year
+          directories that are left empty. Indexes and anything not placed there by originet are
+          never touched
+
+          Possible values:
+          - list:  Every cached snapshot with its family, date, size and path, then a summary
+          - size:  The number of snapshots and the size per family, and in total
+          - prune: Remove the snapshots `--keep-days`/`--keep-last` do not keep (`--dry-run` only
+            reports)
+
+      --keep-days <N>
+          With `--cache prune`: remove the snapshots taken more than N days ago (by the day in the
+          file name; `0` keeps only today's)
+
+      --keep-last <N>
+          With `--cache prune`: keep only the N newest snapshots of each family
+
+      --dry-run
+          With `--cache prune`: print what would be removed and remove nothing
+
       --strict
           Exit with status 1 when any input is not an IP address
 
@@ -90,6 +114,8 @@ Examples:
   originet --pfx2as routeviews-rv2-20261021-0800.pfx2as.gz --file ips.txt
   cat ips.txt | originet -f - -F jsonl
   originet --fetch --date 2019-06-01
+  originet --cache list
+  originet --cache prune --keep-days 30 --dry-run
 ```
 
 ## Inputs
@@ -113,6 +139,7 @@ same order.
 | `--pfx2as FILE` | that file for IPv4 (plain or gzip); the date comes from the file name when it follows CAIDA's naming |
 | `--pfx2as6 FILE` | that file for IPv6 |
 | `--fetch` | downloads the day's IPv4 and IPv6 snapshots into the cache and exits, looking nothing up |
+| `--cache list\|size\|prune` | none: inspects or prunes the cache and exits (see [The cache](#the-cache)) |
 
 Only the families present in the input are loaded: an IPv4-only input never fetches the
 IPv6 snapshot. `--date` applies to the families fetched from CAIDA; a family read from
@@ -131,6 +158,61 @@ ipv4  2026-10-19  downloaded  ./cache/routeviews-prefix2as/2026/10/routeviews-rv
 ipv6  2026-10-19  downloaded  ./cache/routeviews6-prefix2as/2026/10/routeviews-rv6-20261019-1200.pfx2as.gz
 2 snapshots ready in ./cache (ipv4 2026-10-19 downloaded, ipv6 2026-10-19 downloaded; 6.1s)
 ```
+
+## The cache
+
+Snapshots never change, so every day you ask for stays in the cache (about 5 MB per
+day for both families) until you prune it. `--cache` does that without a lookup and
+exits; it takes no addresses and never touches the network.
+
+- `--cache list` prints one line per cached snapshot (family, date, size, path) on
+  standard output and a summary on standard error.
+- `--cache size` prints the number of snapshots and the size per family and in total;
+  the size counts every file under the dataset directories, so the indexes and the
+  monthly listings (a few KB) are included. The per-family figures in the `list` and
+  `prune` summaries are the same whole-directory sizes, while a prune's `kept (…)` is
+  the kept snapshots' own size.
+- `--cache prune` removes the snapshots that `--keep-days N` (taken more than N days
+  ago, by the day in the file name, counted from today in UTC) and `--keep-last N` (all
+  but the N newest of each family) do not keep. One of the two is required; with both,
+  a snapshot stays only when both rules keep it. `--dry-run` prints what would go and
+  removes nothing. A month directory left with nothing but its listing is removed with
+  the listing, then the emptied year directory; the index files and anything originet
+  did not put there (a file of yours, a download in progress) are never touched. A
+  snapshot is recognized only by CAIDA's exact file name for its family
+  (`routeviews-rv2-YYYYMMDD-HHMM.pfx2as.gz`, `routeviews-rv6-...`) in the directory of
+  its own month. A symbolic link standing in for a whole dataset directory is followed.
+
+```text
+$ originet --cache list --cache-dir ./cache
+ipv4  2019-06-01    2.9 MB  ./cache/routeviews-prefix2as/2019/06/routeviews-rv2-20190601-0600.pfx2as.gz
+ipv4  2026-10-19    3.9 MB  ./cache/routeviews-prefix2as/2026/10/routeviews-rv2-20261019-1200.pfx2as.gz
+ipv4  2026-10-21    3.9 MB  ./cache/routeviews-prefix2as/2026/10/routeviews-rv2-20261021-0800.pfx2as.gz
+ipv6  2019-06-01  289.2 KB  ./cache/routeviews6-prefix2as/2019/06/routeviews-rv6-20190601-1200.pfx2as.gz
+ipv6  2026-10-19  907.9 KB  ./cache/routeviews6-prefix2as/2026/10/routeviews-rv6-20261019-1200.pfx2as.gz
+ipv6  2026-10-21  907.9 KB  ./cache/routeviews6-prefix2as/2026/10/routeviews-rv6-20261021-1200.pfx2as.gz
+6 snapshots, 12.8 MB in ./cache (ipv4 3 snapshots 10.7 MB, ipv6 3 snapshots 2.1 MB; 2.6ms)
+
+$ originet --cache size --cache-dir ./cache
+ipv4      3 snapshots   10.7 MB
+ipv6      3 snapshots    2.1 MB
+total     6 snapshots   12.8 MB  ./cache
+
+$ originet --cache prune --keep-days 30 --dry-run --cache-dir ./cache
+ipv4  2019-06-01    2.9 MB  would remove  ./cache/routeviews-prefix2as/2019/06/routeviews-rv2-20190601-0600.pfx2as.gz
+ipv6  2019-06-01  289.2 KB  would remove  ./cache/routeviews6-prefix2as/2019/06/routeviews-rv6-20190601-1200.pfx2as.gz
+2 snapshots would be removed (3.2 MB), 4 kept (9.6 MB) in ./cache (ipv4 3 snapshots 10.7 MB, ipv6 3 snapshots 2.1 MB; 1.7ms)
+
+$ originet --cache prune --keep-days 30 --cache-dir ./cache
+ipv4  2019-06-01    2.9 MB  removed       ./cache/routeviews-prefix2as/2019/06/routeviews-rv2-20190601-0600.pfx2as.gz
+ipv6  2019-06-01  289.2 KB  removed       ./cache/routeviews6-prefix2as/2019/06/routeviews-rv6-20190601-1200.pfx2as.gz
+2 snapshots removed (3.2 MB), 4 kept (9.6 MB) in ./cache (ipv4 2 snapshots 7.8 MB, ipv6 2 snapshots 1.8 MB; 1.6ms)
+```
+
+The summary lines go to standard error (`-q` drops them); the per-snapshot lines are
+`family  date  size  [status]  path`, so `awk` can read them. On a terminal the paths are dimmed and the status colored; `--color` applies.
+Passing a prune flag without `--cache prune`, or `--cache prune` without `--keep-days`
+or `--keep-last`, is a usage error (exit status 2).
 
 ## Outputs
 
@@ -170,4 +252,9 @@ originet -F csv -f ips.txt --date 2019-06-01 -o 2019.csv
 # Keep a cache in the project and never download during a run
 originet --cache-dir ./cache --fetch                        # warms the cache
 originet --cache-dir ./cache --offline -f ips.txt -F parquet -o out.parquet
+
+# See what the cache holds and keep only the last ten days
+originet --cache size
+originet --cache prune --keep-days 10 --dry-run              # what would go
+originet --cache prune --keep-days 10
 ```
