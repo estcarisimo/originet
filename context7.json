@@ -1,0 +1,23 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "originet",
+  "description": "Map IP addresses to origin ASNs with CAIDA's RouteViews prefix-to-AS snapshots, fetched on the fly or read from a local file.",
+  "folders": ["docs"],
+  "excludeFolders": [
+    "tests",
+    "python/tests",
+    "target",
+    "site",
+    "build",
+    "dist",
+    ".venv",
+    "python/.venv"
+  ],
+  "rules": [
+    "`--date YYYY-MM-DD` selects the newest CAIDA snapshot on or before that day. Only address families present in the input are loaded.",
+    "JSON, JSON Lines, CSV, TSV, and Parquet use columns ip, prefix, asn, origins, snapshot, and error. The terminal table folds every origin into asn.",
+    "asn is the first origin; origins keeps CAIDA's notation (A, A_B for multi-origin, A,B for an AS set). A multi-origin prefix is not ranked, so read origins or Match.asns().",
+    "Use Table.lookup_many or lookup_asns for bulk Python lookups; they release the GIL. Pass strict=False to turn invalid inputs into None.",
+    "Snapshots stay cached until pruned. --offline never downloads. --cache prune needs --keep-days N or --keep-last N; --dry-run only reports."
+  ]
+}
