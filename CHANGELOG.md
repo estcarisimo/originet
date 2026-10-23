@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+### Fixed
+- Release workflow: the linux-aarch64 wheel builds again (manylinux_2_28 cross image and
+  `__ARM_ARCH` for ring), so the wheels get attached and published.
+
 ### Added
 - The documentation site serves `/llms.txt` and `/llms-full.txt` for AI agents.
   The README links to them.
