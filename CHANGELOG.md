@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ## [Unreleased]
 
 ### Added
+- The documentation site serves `/llms.txt` and `/llms-full.txt` for AI agents.
+  The README links to them.
+- PyPI publishing is a separate workflow (`.github/workflows/publish-pypi.yml`).
+  It uses Trusted Publishing (OIDC, no API token) and runs only when a GitHub
+  release is published or when someone starts it by hand.
 - `--format table`: aligned columns for reading in a terminal, with `-` for missing
   values and one `asn` column that lists every origin (`149511, 138421` for a
   multi-origin prefix, `{8035, 13979}` for an AS set). It is the default when standard
@@ -22,10 +27,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `load::fetch_snapshot` resolves and caches a snapshot without loading it.
 
 ### Changed
+- The tag release workflow no longer uploads to PyPI, and the `PYPI_PUBLISH`
+  repository variable is unused. Pushing a tag still builds the GitHub release,
+  the binaries, the wheels, and the container image.
 - At a terminal the default output is the table instead of the JSON report; pipes and
   files are unchanged.
-- Release workflow: a version already on PyPI or crates.io is skipped instead of failing
-  the run, so the first crates.io upload can be done by hand and the tag still works.
+- A version already on PyPI or crates.io is skipped instead of failing the run, so the
+  first crates.io upload can be done by hand and the tag still works.
 - Crate tarball no longer carries `AGENTS.md`, `CLAUDE.md` and `.dockerignore`.
 
 ## [1.0.0] - 2026-10-22

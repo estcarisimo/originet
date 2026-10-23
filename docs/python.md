@@ -13,7 +13,8 @@ uv pip install "originet @ git+https://github.com/estcarisimo/originet#subdirect
 ```
 
 Wheels for Linux (x86_64, aarch64, manylinux), macOS (Intel, Apple Silicon) and Windows
-are built by the release workflow and attached to each release.
+are built by the release workflow and attached to each release. Uploading them to PyPI
+is `.github/workflows/publish-pypi.yml`; the steps are in `CONTRIBUTING.md`.
 
 ## Loading a table
 

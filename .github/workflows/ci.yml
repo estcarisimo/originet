@@ -175,4 +175,8 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Build the site
-        run: uvx --with-requirements docs/requirements.txt mkdocs build --strict
+        run: |
+          uvx --with-requirements docs/requirements.txt mkdocs build --strict
+          test -s site/llms.txt
+          test -s site/llms-full.txt
+          grep -q 'https://estcarisimo.github.io/originet/' site/llms.txt
