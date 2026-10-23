@@ -14,7 +14,10 @@ uv run pytest
 ```
 
 Requirements: Rust 1.88 or newer (`rust-version` in `Cargo.toml`), and for the Python
-bindings [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. On an Apple Silicon
+bindings [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Build the extension
+with `uv sync` (maturin), not with `cargo build --workspace`: a pyo3 `extension-module`
+cannot be linked by cargo alone (`cargo clippy --workspace` and `cargo test --workspace`
+are fine, they do not link it). On an Apple Silicon
 Mac the Rust toolchain must be the arm64 one (rustup); an x86_64 Homebrew toolchain
 cannot build the extension for an arm64 Python.
 
@@ -64,8 +67,16 @@ that the tag is on `main`; then it creates the GitHub release with the changelog
 attaches binaries (Linux x86_64/aarch64 musl, macOS x86_64/arm64, Windows x86_64), builds
 the wheels and the sdist, and pushes `ghcr.io/estcarisimo/originet`.
 
-Publishing to PyPI and crates.io is off until Trusted Publishing is configured on each
-registry (a *pending publisher* on PyPI for `originet`, workflow `release.yml`,
-environment `pypi`; a trusted publisher on crates.io for the crate, environment
-`crates-io`). Turn each one on with a repository variable: `PYPI_PUBLISH=true`,
-`CRATES_IO_PUBLISH=true`.
+Publishing to PyPI and crates.io is gated by the repository variables `PYPI_PUBLISH` and
+`CRATES_IO_PUBLISH` (`true` to publish) and uses OIDC Trusted Publishing, no stored
+tokens. One-time setup per registry:
+
+- PyPI: a *pending publisher* for `originet` (owner `estcarisimo`, repository
+  `originet`, workflow `release.yml`, environment `pypi`) can be created before the first
+  upload, so the workflow can publish the first version.
+- crates.io has no pending publisher: the first version is uploaded by hand
+  (`cargo login` with a token scoped to `publish-new` for `originet`, then
+  `cargo publish -p originet --locked` from `main`), the trusted publisher is added in the
+  crate's settings (owner `estcarisimo`, repository `originet`, workflow `release.yml`,
+  environment `crates-io`), and the token is revoked. The workflow skips a version that
+  is already on the registry, so tagging that same version afterwards is safe.

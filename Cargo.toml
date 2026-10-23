@@ -16,7 +16,18 @@ readme = "README.md"
 keywords = ["asn", "bgp", "caida", "routeviews", "ip"]
 categories = ["command-line-utilities", "network-programming"]
 authors = ["Esteban Carisimo"]
-exclude = ["/.github", "/docs", "/python", "/mkdocs.yml", "/Dockerfile", "/docker-compose.yml", "/deny.toml"]
+exclude = [
+  "/.github",
+  "/docs",
+  "/python",
+  "/mkdocs.yml",
+  "/Dockerfile",
+  "/docker-compose.yml",
+  "/deny.toml",
+  "/.dockerignore",
+  "/AGENTS.md",
+  "/CLAUDE.md",
+]
 
 [[bin]]
 name = "originet"
