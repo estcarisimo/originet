@@ -443,32 +443,37 @@ fn help_and_version() {
 
 /// Seeds a cache as the fetcher lays it out: two IPv4 months (one of them with a
 /// listing), one IPv6 month, both indexes. Returns the paths of the snapshots, IPv4
-/// first, oldest first, as the binary prints them.
+/// first, oldest first, as the binary prints them (joined component by component: the
+/// binary prints the platform's separators).
 fn seed_cache(root: &std::path::Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    for (dataset, year_month, name) in [
+    for (dataset, year, month, name) in [
         (
             "routeviews-prefix2as",
-            "2015/01",
+            "2015",
+            "01",
             "routeviews-rv2-20150101-1200.pfx2as.gz",
         ),
         (
             "routeviews-prefix2as",
-            "2026/10",
+            "2026",
+            "10",
             "routeviews-rv2-20261020-1000.pfx2as.gz",
         ),
         (
             "routeviews-prefix2as",
-            "2026/10",
+            "2026",
+            "10",
             "routeviews-rv2-20261021-0800.pfx2as.gz",
         ),
         (
             "routeviews6-prefix2as",
-            "2026/10",
+            "2026",
+            "10",
             "routeviews-rv6-20261021-1200.pfx2as.gz",
         ),
     ] {
-        let dir = root.join(dataset).join(year_month);
+        let dir = root.join(dataset).join(year).join(month);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
         fs::copy(fixture("sample-v4.pfx2as.gz"), &path).unwrap();
@@ -633,10 +638,11 @@ fn cache_prune_keep_days_counts_from_today() {
     // One snapshot dated today (UTC) and one from 2015: `--keep-days 30` keeps today's.
     let dir = tempfile::tempdir().unwrap();
     let today = jiff::Timestamp::now().to_zoned(jiff::tz::TimeZone::UTC).date();
-    let month_dir =
-        dir.path()
-            .join("routeviews-prefix2as")
-            .join(format!("{:04}/{:02}", today.year(), today.month()));
+    let month_dir = dir
+        .path()
+        .join("routeviews-prefix2as")
+        .join(format!("{:04}", today.year()))
+        .join(format!("{:02}", today.month()));
     fs::create_dir_all(&month_dir).unwrap();
     let recent = month_dir.join(format!(
         "routeviews-rv2-{:04}{:02}{:02}-1200.pfx2as.gz",
@@ -645,7 +651,7 @@ fn cache_prune_keep_days_counts_from_today() {
         today.day()
     ));
     fs::copy(fixture("sample-v4.pfx2as.gz"), &recent).unwrap();
-    let old_dir = dir.path().join("routeviews-prefix2as/2015/01");
+    let old_dir = dir.path().join("routeviews-prefix2as").join("2015").join("01");
     fs::create_dir_all(&old_dir).unwrap();
     let old = old_dir.join("routeviews-rv2-20150101-1200.pfx2as.gz");
     fs::copy(fixture("sample-v4.pfx2as.gz"), &old).unwrap();
