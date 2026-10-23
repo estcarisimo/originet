@@ -169,7 +169,9 @@ exits; it takes no addresses and never touches the network.
   standard output and a summary on standard error.
 - `--cache size` prints the number of snapshots and the size per family and in total;
   the size counts every file under the dataset directories, so the indexes and the
-  monthly listings (a few KB) are included.
+  monthly listings (a few KB) are included. The per-family figures in the `list` and
+  `prune` summaries are the same whole-directory sizes, while a prune's `kept (…)` is
+  the kept snapshots' own size.
 - `--cache prune` removes the snapshots that `--keep-days N` (taken more than N days
   ago, by the day in the file name, counted from today in UTC) and `--keep-last N` (all
   but the N newest of each family) do not keep. One of the two is required; with both,

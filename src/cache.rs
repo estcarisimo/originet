@@ -233,9 +233,14 @@ impl Retention {
     /// The snapshots of `inventory` the rules do not keep, oldest first. `today` is the
     /// day `keep_days` counts back from.
     pub fn expired(self, inventory: &FamilyInventory, today: Date) -> Vec<&CachedSnapshot> {
-        let cutoff = self
-            .keep_days
-            .map(|days| today.saturating_sub(jiff::Span::new().days(i64::from(days))));
+        // A number of days jiff cannot represent (about 20,000 years) is older than any
+        // snapshot can be, so it keeps everything by age instead of panicking.
+        let cutoff = self.keep_days.and_then(|days| {
+            jiff::Span::new()
+                .try_days(i64::from(days))
+                .ok()
+                .map(|span| today.saturating_sub(span))
+        });
         let count = inventory.snapshots.len();
         let newest_from = self.keep_last.map_or(0, |keep| count.saturating_sub(keep));
         inventory
@@ -535,6 +540,15 @@ mod tests {
         assert!(Retention::default().is_empty());
         assert_eq!(
             Retention::default().expired(v4, today),
+            Vec::<&CachedSnapshot>::new()
+        );
+        // Beyond what a date can be shifted by: nothing is that old, nothing expires.
+        assert_eq!(
+            Retention {
+                keep_days: Some(u32::MAX),
+                keep_last: None,
+            }
+            .expired(v4, today),
             Vec::<&CachedSnapshot>::new()
         );
 

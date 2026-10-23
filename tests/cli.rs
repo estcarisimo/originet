@@ -751,3 +751,19 @@ fn cache_flags_are_usage_checked() {
     cmd().args(["--cache", "list", "--fetch"]).assert().code(2);
     cmd().args(["--cache", "wipe"]).assert().code(2);
 }
+
+#[test]
+fn cache_prune_with_an_enormous_keep_days_keeps_everything() {
+    // u32::MAX days is beyond what a date can be shifted by; that must not panic.
+    let dir = tempfile::tempdir().unwrap();
+    let paths = seed_cache(dir.path());
+    cmd()
+        .arg("--cache-dir")
+        .arg(dir.path())
+        .args(["--cache", "prune", "--keep-days", "4294967295", "--dry-run"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(predicate::str::starts_with("0 snapshots would be removed"));
+    assert!(paths.iter().all(|path| path.is_file()));
+}
