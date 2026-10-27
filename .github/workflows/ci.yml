@@ -2,8 +2,8 @@ name: CI
 
 # Every pull request and every push to main: format, clippy, rustdoc, cargo-deny, tests on
 # three operating systems, the MSRV, the Python bindings, the Linux wheels, the Docker
-# image and the docs site. These job names are the required checks of the `protect-main`
-# ruleset (the wheel jobs are new: add them there to make them required).
+# image and the docs site. The `protect-main` ruleset lists which of these jobs are
+# required checks.
 
 on:
   pull_request:
@@ -147,9 +147,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x86_64, target: x86_64, manylinux: auto }
+          # Kept in step with release.yml's `wheels` matrix, which explains the aarch64
+          # glibc entry: manylinux2014's cross GCC cannot build ring for ARMv8, so that
+          # wheel is manylinux_2_28 with __ARM_ARCH defined. The musl cross image needs
+          # neither.
+          - { name: linux-x86_64, target: x86_64, manylinux: auto, image: "python:3.12-slim" }
           - { name: linux-aarch64, target: aarch64, manylinux: "2_28", docker-options: "-e CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" }
-          - { name: linux-musl-x86_64, target: x86_64, manylinux: musllinux_1_2 }
+          - { name: linux-musl-x86_64, target: x86_64, manylinux: musllinux_1_2, image: "python:3.12-alpine" }
           - { name: linux-musl-aarch64, target: aarch64, manylinux: musllinux_1_2 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -162,6 +166,21 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           docker-options: ${{ matrix.docker-options || '' }}
           args: --release --out dist --locked
+      # The x86_64 wheels are installed and used in a stock Python image of their libc
+      # (the runner is x86_64; the aarch64 ones are only built here).
+      - name: Install the wheel and look an address up
+        if: matrix.image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD/python/dist:/dist:ro" -v "$PWD/tests/fixtures:/fx:ro" "$IMAGE" sh -c '
+            pip install --quiet --root-user-action=ignore /dist/*.whl &&
+            python -c "
+          from originet import Table
+          t = Table.from_files(ipv4=\"/fx/sample-v4.pfx2as.gz\")
+          assert t.len_v4 > 0, t.len_v4
+          print(t.len_v4, \"prefixes;\", t.lookup_asns([\"10.0.0.1\"], strict=False))
+          "'
 
   docker:
     name: docker
