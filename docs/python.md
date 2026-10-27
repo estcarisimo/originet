@@ -12,6 +12,7 @@ uv pip install originet          # or: pip install originet
 ```
 
 Wheels are published for Linux x86_64 (manylinux2014) and aarch64 (manylinux_2_28),
+Linux with musl, such as Alpine (musllinux_1_2, x86_64 and aarch64),
 macOS (Intel, Apple Silicon) and Windows, for CPython 3.10 and newer (abi3), and are
 also attached to each [GitHub release](https://github.com/estcarisimo/originet/releases).
 Anything else falls back to the sdist, which compiles the extension and needs a Rust

@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ## [Unreleased]
 
 ### Added
+- Python wheels for Linux with musl (`musllinux_1_2`, x86_64 and aarch64), so
+  `pip install originet` works on Alpine without a Rust toolchain. Before, pip found no
+  wheel there and fell back to the sdist, which needs Rust 1.88+ to compile.
 - `context7.json` so Context7 indexes the user documentation in `docs/` and passes short usage rules to coding agents.
 
 ## [1.0.1] - 2026-10-23

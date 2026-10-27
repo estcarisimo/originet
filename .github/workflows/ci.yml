@@ -1,8 +1,9 @@
 name: CI
 
 # Every pull request and every push to main: format, clippy, rustdoc, cargo-deny, tests on
-# three operating systems, the MSRV, the Python bindings, the Docker image and the docs
-# site. These job names are the required checks of the `protect-main` ruleset.
+# three operating systems, the MSRV, the Python bindings, the Linux wheels, the Docker
+# image and the docs site. These job names are the required checks of the `protect-main`
+# ruleset (the wheel jobs are new: add them there to make them required).
 
 on:
   pull_request:
@@ -135,6 +136,32 @@ jobs:
         run: uv run mypy
       - name: pytest
         run: uv run pytest -q
+
+  wheels:
+    # The release's Linux wheels, built on every PR (not published), so a wheel that
+    # stops building fails here and not at the tag (1.0.1's aarch64 wheel did).
+    name: wheel (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, target: x86_64, manylinux: auto }
+          - { name: linux-aarch64, target: aarch64, manylinux: "2_28", docker-options: "-e CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" }
+          - { name: linux-musl-x86_64, target: x86_64, manylinux: musllinux_1_2 }
+          - { name: linux-musl-aarch64, target: aarch64, manylinux: musllinux_1_2 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: python
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          docker-options: ${{ matrix.docker-options || '' }}
+          args: --release --out dist --locked
 
   docker:
     name: docker

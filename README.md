@@ -60,7 +60,7 @@ and Windows are attached to every
 ### Python
 
 From [PyPI](https://pypi.org/project/originet/), with prebuilt wheels for Linux (x86_64,
-aarch64), macOS (Intel, Apple Silicon) and Windows on Python 3.10 or newer:
+aarch64; glibc and musl), macOS (Intel, Apple Silicon) and Windows on Python 3.10 or newer:
 
 ```bash
 uv pip install originet          # or: pip install originet
