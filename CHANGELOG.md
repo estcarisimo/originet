@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-29
+
+Python wheels for Linux with musl, so `pip install originet` works on Alpine without a
+Rust toolchain, and every pull request now builds the Linux wheels and installs the
+x86_64 ones, so a wheel that stops building fails at the pull request, not at the tag.
+
 ### Added
 - Python wheels for Linux with musl (`musllinux_1_2`, x86_64 and aarch64), so
   `pip install originet` works on Alpine without a Rust toolchain. Before, pip found no

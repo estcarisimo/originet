@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use originet in your work, please cite it and CAIDA's prefix-to-AS dataset."
 title: "originet"
 type: software
-version: 1.0.1
-date-released: 2026-10-23
+version: 1.1.0
+date-released: 2026-10-29
 repository-code: "https://github.com/estcarisimo/originet"
 url: "https://estcarisimo.github.io/originet/"
 license: MIT
