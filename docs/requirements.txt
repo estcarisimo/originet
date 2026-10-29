@@ -1,5 +1,5 @@
 # Documentation site. Build with: uvx --with-requirements docs/requirements.txt mkdocs build --strict
 mkdocs==1.6.1
-mkdocs-material==9.7.7
+mkdocs-material==9.8.0
 # Serves /llms.txt (and /llms-full.txt) from the built site. Requires Python >= 3.11.
 mkdocs-llmstxt==0.5.1
