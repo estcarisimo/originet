@@ -54,7 +54,7 @@ env_logger = { version = "0.11", default-features = false, features = ["auto-col
 flate2 = "1.1"
 indicatif = "0.18"
 ipnet = "2.11"
-jiff = "0.2"
+jiff = "1.0"
 log = "0.4"
 prefix-trie = { version = "0.10", default-features = false, features = ["ipnet"] }
 serde = { version = "1.0", features = ["derive"] }
